@@ -1,0 +1,14 @@
+# Clojure
+.cpcache/
+.clj-kondo/.cache/
+.lsp/
+.nrepl-port
+
+# Build artifacts
+target/
+*.class
+
+# Local configuration
+.env
+.env.*
+!.env.example
