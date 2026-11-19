@@ -159,7 +159,7 @@
 
 (defn sb-solid-vapor-pressure
   [temp-c]
-  (let [temp-k (+ temp-c 273.5)
+  (let [temp-k (+ temp-c 273.15)
         pressure-torr
         (Math/pow 10.0
                   (- 10.571 (/ 10300.0 temp-k)))]
@@ -175,8 +175,28 @@
   [pressure-pa]
   (/ pressure-pa 133.32236842105263))
 
-(let [melting-point 630.63
+(let [;; Physical constants and plotting range.
+      melting-point 630.63
+      x-domain [450 800]
+      y-domain [1.0e-4 5.0]
 
+      ;; Major and minor tick positions.
+      x-major-values (vec (range 450 801 50))
+      x-minor-values (vec (remove #(zero? (mod % 50))
+                                  (range 450 801 10)))
+
+      y-major-values (vec (filter #(<= % (second y-domain))
+                                  [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]))
+
+      y-minor-values
+      (vec
+       (for [exp (range -4 1)
+             m (range 2 10)
+             :let [y (* m (Math/pow 10.0 exp))]
+             :when (<= y (second y-domain))]
+         y))
+
+      ;; Main data: solid and liquid vapor pressure curves.
       points
       (vec
        (concat
@@ -192,142 +212,192 @@
            (pa-to-torr (sb-liquid-vapor-pressure temp-c))
            :phase "Liquid"})))
 
-      x-major
-      (mapv (fn [x] {:x x}) (range 450 801 50))
+      ;; Auxiliary datasets for grid lines.
+      x-major-grid (mapv (fn [x] {:x x}) x-major-values)
+      x-minor-grid (mapv (fn [x] {:x x}) x-minor-values)
+      y-major-grid (mapv (fn [y] {:y y}) y-major-values)
+      y-minor-grid (mapv (fn [y] {:y y}) y-minor-values)
 
-      x-minor
-      (mapv (fn [x] {:x x})
-            (remove #(zero? (mod % 50))
-                    (range 450 801 10)))
-
-      y-major-values
-      [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]
-
-      y-minor-values
-      (->> (for [exp (range -4 1)
-                 m (range 2 10)]
-             (* m (Math/pow 10.0 exp)))
-           (filter #(<= % 5.0))
-           (mapv (fn [y] {:y y})))
-
-      y-major
-      (mapv (fn [y] {:y y})
-            (filter #(<= % 5.0) y-major-values))
-
+      ;; Special annotation: melting point.
       melting-data
       [{:temp-c melting-point
         :pressure-torr
         (pa-to-torr (sb-liquid-vapor-pressure melting-point))
-        :label "melting point"}]]
+        :label "melting point"}]
+
+      ;; Plot appearance.
+      plot-width 800
+      plot-height 600
+
+      major-grid-color "#bbbbbb"
+      minor-grid-color "#dddddd"
+
+      major-grid-width 1.2
+      minor-grid-width 0.6
+      curve-width 3
+
+      axis-label-font-size 15
+      axis-title-font-size 17
+      legend-font-size 15
+      title-font-size 18
+      melting-label-font-size 14
+
+      ;; Reusable axis definitions.
+      x-axis
+      {:title "Temperature (°C)"
+       :values x-major-values
+       :grid false
+       :labelFontSize axis-label-font-size
+       :titleFontSize axis-title-font-size}
+
+      y-axis
+      {:title "Vapor pressure (Torr)"
+       :values y-major-values
+       :grid false
+       :labelFontSize axis-label-font-size
+       :titleFontSize axis-title-font-size}
+
+      ;; Reusable legend definition.
+      phase-legend
+      {:title nil
+       :orient "top-left"
+       :offset 8
+       :fillColor "white"
+       :strokeColor "lightgray"
+       :padding 6
+       :labelFontSize legend-font-size
+       :symbolSize 180}
+
+      ;; Helper layers.
+      vertical-grid-layer
+      (fn [values color stroke-width]
+        {:data {:values values}
+         :mark {:type "rule"
+                :color color
+                :strokeWidth stroke-width}
+         :encoding
+         {:x {:field "x"
+              :type "quantitative"
+              :scale {:domain x-domain}}}})
+
+      horizontal-grid-layer
+      (fn [values color stroke-width]
+        {:data {:values values}
+         :mark {:type "rule"
+                :color color
+                :strokeWidth stroke-width}
+         :encoding
+         {:y {:field "y"
+              :type "quantitative"
+              :scale {:type "log"
+                      :domain y-domain}}}})
+
+      data-lines-layer
+      {:data {:values points}
+       :mark {:type "line"
+              :strokeWidth curve-width}
+       :encoding
+       {:x {:field "temp-c"
+            :type "quantitative"
+            :scale {:domain x-domain}
+            :axis x-axis}
+
+        :y {:field "pressure-torr"
+            :type "quantitative"
+            :scale {:type "log"
+                    :domain y-domain}
+            :axis y-axis}
+
+        :color {:field "phase"
+                :type "nominal"
+                :legend phase-legend}}}
+
+      melting-point-layer
+      {:data {:values melting-data}
+       :mark {:type "circle"
+              :size 100
+              :color "black"}
+       :encoding
+       {:x {:field "temp-c"
+            :type "quantitative"}
+        :y {:field "pressure-torr"
+            :type "quantitative"
+            :scale {:type "log"}}}}
+
+      melting-label-layer
+      {:data {:values melting-data}
+       :mark {:type "text"
+              :color "black"
+              :fontSize melting-label-font-size
+              :align "left"
+              :dx 10
+              :dy 5}
+       :encoding
+       {:x {:field "temp-c"
+            :type "quantitative"}
+        :y {:field "pressure-torr"
+            :type "quantitative"
+            :scale {:type "log"}}
+        :text {:field "label"
+               :type "nominal"}}}]
 
   (kind/vega-lite
    {:title {:text "Saturated vapor pressure of antimony"
             :orient "bottom"
             :anchor "middle"
-            :fontSize 18
+            :fontSize title-font-size
             :offset 18}
 
-    :width 800
-    :height 600
+    :width plot-width
+    :height plot-height
 
-    :layer
+    :layer [(vertical-grid-layer x-minor-grid minor-grid-color minor-grid-width)
+            (vertical-grid-layer x-major-grid major-grid-color major-grid-width)
+            (horizontal-grid-layer y-minor-grid minor-grid-color minor-grid-width)
+            (horizontal-grid-layer y-major-grid major-grid-color major-grid-width)
+            data-lines-layer
+            melting-point-layer
+            melting-label-layer]}))
 
-    [;; minor vertical grid
-     {:data {:values x-minor}
-      :mark {:type "rule" :color "#dddddd"}
-      :encoding
-      {:x {:field "x"
-           :type "quantitative"
-           :scale {:domain [450 800]}}}}
+;; 6. Mean Free Path and Knunsen Number
+;;
+;; The vapor is assumed to consist entirely os $Sb_4$.
+;; Molecules are approximated as hard spheres.
+;;
+;; $$\lambda = \frac{k_B T}{\sqrt{2}\pi d^2 P}$$
+;;
+;; $T$ is in $K$, $d$ is in $m$, $P$ is in $Pa$.
+;; The mean free path is returned in $m$.
+;;
+;; $$\mathrm{Kn} = \frac{\lambda}{D}$$
+;;
+;; $D$ is the internal tube diameter in m.
 
-     ;; major vertical grid
-     {:data {:values x-major}
-      :mark {:type "rule" :color "#bbbbbb"}
-      :encoding
-      {:x {:field "x"
-           :type "quantitative"
-           :scale {:domain [450 800]}}}}
+(def boltzmann-const 1.380649e-23)
 
-     ;; minor horizontal grid
-     {:data {:values y-minor-values}
-      :mark {:type "rule" :color "#dddddd"}
-      :encoding
-      {:y {:field "y"
-           :type "quantitative"
-           :scale {:type "log"
-                   :domain [1.0e-4 5.0]}}}}
+(defn sb4-mean-free-path
+  [temp-c pressure-pa collision-diameter-m]
+  (let [temp-k (+ temp-c 273.15)]
+    (when-not (and (pos? temp-k)
+                   (pos? pressure-pa)
+                   (pos? collision-diameter-m))
+      (throw (ex-info "Invalid gas parameters."
+                      {:temp-c temp-c
+                       :pressure-pa pressure-pa
+                       :collision-diameter-m collision-diameter-m})))
+    (/ (* boltzmann-const temp-k)
+       (* (Math/sqrt 2.0)
+          Math/PI
+          collision-diameter-m
+          collision-diameter-m
+          pressure-pa))))
 
-     ;; major horizontal grid
-     {:data {:values y-major}
-      :mark {:type "rule" :color "#bbbbbb"}
-      :encoding
-      {:y {:field "y"
-           :type "quantitative"
-           :scale {:type "log"
-                   :domain [1.0e-4 5.0]}}}}
-
-     ;; data lines
-     {:data {:values points}
-      :mark {:type "line" :strokeWidth 3}
-      :encoding
-      {:x {:field "temp-c"
-           :type "quantitative"
-           :scale {:domain [450 800]}
-           :axis {:title "Temperature (°C)"
-                  :values (vec (range 450 801 50))
-                  :grid false
-                  :labelFontSize 15
-                  :titleFontSize 17}}
-
-       :y {:field "pressure-torr"
-           :type "quantitative"
-           :scale {:type "log"
-                   :domain [1.0e-4 5.0]}
-           :axis {:title "Vapor pressure (Torr)"
-                  :values y-major-values
-                  :grid false
-                  :labelFontSize 15
-                  :titleFontSize 17}}
-
-       :color {:field "phase"
-               :type "nominal"
-               :legend {:title nil
-                        :orient "top-left"
-                        :offset 8
-                        :fillColor "white"
-                        :strokeColor "lightgray"
-                        :padding 6
-                        :labelFontSize 15
-                        :symbolSize 180}}}}
-
-     ;; Melting point marker
-     {:data {:values melting-data}
-      :mark {:type "circle"
-             :size 100
-             :color "black"}
-      :encoding
-      {:x {:field "temp-c"
-           :type "quantitative"}
-       :y {:field "pressure-torr"
-           :type "quantitative"
-           :scale {:type "log"}}}}
-
-     ;; Melting point label
-     {:data {:values melting-data}
-      :mark {:type "text"
-             :color "black"
-             :fontSize 14
-             :align "left"
-             :dx 10
-             :dy 5}
-      :encoding
-      {:x {:field "temp-c"
-           :type "quantitative"}
-       :y {:field "pressure-torr"
-           :type "quantitative"
-           :scale {:type "log"}}
-       :text {:field "label"
-              :type "nominal"}}}]}))
+(defn knudsen-number
+  [mean-free-path-m tube-diameter-m]
+  (when-not (pos? tube-diameter-m)
+    (throw (ex-info "Tube diameter must be positive."
+                    {:tube-diameter-m tube-diameter-m})))
+  (/ mean-free-path-m tube-diameter-m))
 
 ^:kindly/hide-code
 (kind/hiccup

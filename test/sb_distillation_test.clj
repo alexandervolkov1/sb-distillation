@@ -59,6 +59,35 @@
                  (model/liquid-height-from-mass
                   radius straight-length mass 0.0)))))
 
+(deftest vapor-pressure-test
+  (let [liquid-pressure
+        (fn [temp-c]
+          (model/pa-to-torr
+           (model/sb-liquid-vapor-pressure temp-c)))
+
+        solid-pressure
+        (fn [temp-c]
+          (model/pa-to-torr
+           (model/sb-solid-vapor-pressure temp-c)))]
+
+    ;; Pressure increases with temperature.
+    (is (< (liquid-pressure 650.0)
+           (liquid-pressure 700.0)
+           (liquid-pressure 750.0)))
+
+    (is (< (solid-pressure 450.0)
+           (solid-pressure 500.0)
+           (solid-pressure 550.0)))
+
+    ;; Reference values calculated from the correlations.
+    (is (< (Math/abs (- (liquid-pressure 700.0)
+                        0.48189078))
+           1.0e-6))
+
+    (is (< (Math/abs (- (solid-pressure 500.0)
+                        0.001773684))
+           1.0e-7))))
+
 (defn -main
   [& _]
   (let [{:keys [fail error]} (run-tests 'sb-distillation-test)]

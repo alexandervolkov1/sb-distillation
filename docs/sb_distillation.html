@@ -105,14 +105,34 @@
                      (/ 4475.449 (- temp-k 152.352))))]
     (* 1.0e5 pressure-bar)))</code></pre></div></div><div style="margin:15px;"><div><h3 id="5.2.-solid-antimony">5.2. Solid Antimony</h3><span><script>katex.render("\\log_{10}P = 10.571 - \\frac{10300}{T}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p><span><script>katex.render("T", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("K", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>, <span><script>katex.render("P", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("Torr", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>. Experimental range: 420-550 °C.</p><p>Source: Rosenblatt and Birchenall (1961). <a href="https://doi.org/10.1063/1.1701217">Journal of Chemical Physics</a></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn sb-solid-vapor-pressure
   [temp-c]
-  (let [temp-k (+ temp-c 273.5)
+  (let [temp-k (+ temp-c 273.15)
         pressure-torr
         (Math/pow 10.0
                   (- 10.571 (/ 10300.0 temp-k)))]
     (* 133.32236842105263 pressure-torr)))</code></pre></div></div><div style="margin:15px;"><div><h3 id="5.3.-saturated-vapor-pressure">5.3. Saturated Vapor Pressure</h3><p>Temperature range: 450-800 °C. Logarithmic pressure scale. Values outside the experimental ranges are extrapolated.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn pa-to-torr
   [pressure-pa]
-  (/ pressure-pa 133.32236842105263))</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [melting-point 630.63
+  (/ pressure-pa 133.32236842105263))</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [;; Physical constants and plotting range.
+      melting-point 630.63
+      x-domain [450 800]
+      y-domain [1.0e-4 5.0]
 
+      ;; Major and minor tick positions.
+      x-major-values (vec (range 450 801 50))
+      x-minor-values (vec (remove #(zero? (mod % 50))
+                                  (range 450 801 10)))
+
+      y-major-values (vec (filter #(&lt;= % (second y-domain))
+                                  [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]))
+
+      y-minor-values
+      (vec
+       (for [exp (range -4 1)
+             m (range 2 10)
+             :let [y (* m (Math/pow 10.0 exp))]
+             :when (&lt;= y (second y-domain))]
+         y))
+
+      ;; Main data: solid and liquid vapor pressure curves.
       points
       (vec
        (concat
@@ -128,142 +148,172 @@
            (pa-to-torr (sb-liquid-vapor-pressure temp-c))
            :phase &quot;Liquid&quot;})))
 
-      x-major
-      (mapv (fn [x] {:x x}) (range 450 801 50))
+      ;; Auxiliary datasets for grid lines.
+      x-major-grid (mapv (fn [x] {:x x}) x-major-values)
+      x-minor-grid (mapv (fn [x] {:x x}) x-minor-values)
+      y-major-grid (mapv (fn [y] {:y y}) y-major-values)
+      y-minor-grid (mapv (fn [y] {:y y}) y-minor-values)
 
-      x-minor
-      (mapv (fn [x] {:x x})
-            (remove #(zero? (mod % 50))
-                    (range 450 801 10)))
-
-      y-major-values
-      [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]
-
-      y-minor-values
-      (-&gt;&gt; (for [exp (range -4 1)
-                 m (range 2 10)]
-             (* m (Math/pow 10.0 exp)))
-           (filter #(&lt;= % 5.0))
-           (mapv (fn [y] {:y y})))
-
-      y-major
-      (mapv (fn [y] {:y y})
-            (filter #(&lt;= % 5.0) y-major-values))
-
+      ;; Special annotation: melting point.
       melting-data
       [{:temp-c melting-point
         :pressure-torr
         (pa-to-torr (sb-liquid-vapor-pressure melting-point))
-        :label &quot;melting point&quot;}]]
+        :label &quot;melting point&quot;}]
+
+      ;; Plot appearance.
+      plot-width 800
+      plot-height 600
+
+      major-grid-color &quot;#bbbbbb&quot;
+      minor-grid-color &quot;#dddddd&quot;
+
+      major-grid-width 1.2
+      minor-grid-width 0.6
+      curve-width 3
+
+      axis-label-font-size 15
+      axis-title-font-size 17
+      legend-font-size 15
+      title-font-size 18
+      melting-label-font-size 14
+
+      ;; Reusable axis definitions.
+      x-axis
+      {:title &quot;Temperature (°C)&quot;
+       :values x-major-values
+       :grid false
+       :labelFontSize axis-label-font-size
+       :titleFontSize axis-title-font-size}
+
+      y-axis
+      {:title &quot;Vapor pressure (Torr)&quot;
+       :values y-major-values
+       :grid false
+       :labelFontSize axis-label-font-size
+       :titleFontSize axis-title-font-size}
+
+      ;; Reusable legend definition.
+      phase-legend
+      {:title nil
+       :orient &quot;top-left&quot;
+       :offset 8
+       :fillColor &quot;white&quot;
+       :strokeColor &quot;lightgray&quot;
+       :padding 6
+       :labelFontSize legend-font-size
+       :symbolSize 180}
+
+      ;; Helper layers.
+      vertical-grid-layer
+      (fn [values color stroke-width]
+        {:data {:values values}
+         :mark {:type &quot;rule&quot;
+                :color color
+                :strokeWidth stroke-width}
+         :encoding
+         {:x {:field &quot;x&quot;
+              :type &quot;quantitative&quot;
+              :scale {:domain x-domain}}}})
+
+      horizontal-grid-layer
+      (fn [values color stroke-width]
+        {:data {:values values}
+         :mark {:type &quot;rule&quot;
+                :color color
+                :strokeWidth stroke-width}
+         :encoding
+         {:y {:field &quot;y&quot;
+              :type &quot;quantitative&quot;
+              :scale {:type &quot;log&quot;
+                      :domain y-domain}}}})
+
+      data-lines-layer
+      {:data {:values points}
+       :mark {:type &quot;line&quot;
+              :strokeWidth curve-width}
+       :encoding
+       {:x {:field &quot;temp-c&quot;
+            :type &quot;quantitative&quot;
+            :scale {:domain x-domain}
+            :axis x-axis}
+
+        :y {:field &quot;pressure-torr&quot;
+            :type &quot;quantitative&quot;
+            :scale {:type &quot;log&quot;
+                    :domain y-domain}
+            :axis y-axis}
+
+        :color {:field &quot;phase&quot;
+                :type &quot;nominal&quot;
+                :legend phase-legend}}}
+
+      melting-point-layer
+      {:data {:values melting-data}
+       :mark {:type &quot;circle&quot;
+              :size 100
+              :color &quot;black&quot;}
+       :encoding
+       {:x {:field &quot;temp-c&quot;
+            :type &quot;quantitative&quot;}
+        :y {:field &quot;pressure-torr&quot;
+            :type &quot;quantitative&quot;
+            :scale {:type &quot;log&quot;}}}}
+
+      melting-label-layer
+      {:data {:values melting-data}
+       :mark {:type &quot;text&quot;
+              :color &quot;black&quot;
+              :fontSize melting-label-font-size
+              :align &quot;left&quot;
+              :dx 10
+              :dy 5}
+       :encoding
+       {:x {:field &quot;temp-c&quot;
+            :type &quot;quantitative&quot;}
+        :y {:field &quot;pressure-torr&quot;
+            :type &quot;quantitative&quot;
+            :scale {:type &quot;log&quot;}}
+        :text {:field &quot;label&quot;
+               :type &quot;nominal&quot;}}}]
 
   (kind/vega-lite
    {:title {:text &quot;Saturated vapor pressure of antimony&quot;
             :orient &quot;bottom&quot;
             :anchor &quot;middle&quot;
-            :fontSize 18
+            :fontSize title-font-size
             :offset 18}
 
-    :width 800
-    :height 600
+    :width plot-width
+    :height plot-height
 
-    :layer
-
-    [;; minor vertical grid
-     {:data {:values x-minor}
-      :mark {:type &quot;rule&quot; :color &quot;#dddddd&quot;}
-      :encoding
-      {:x {:field &quot;x&quot;
-           :type &quot;quantitative&quot;
-           :scale {:domain [450 800]}}}}
-
-     ;; major vertical grid
-     {:data {:values x-major}
-      :mark {:type &quot;rule&quot; :color &quot;#bbbbbb&quot;}
-      :encoding
-      {:x {:field &quot;x&quot;
-           :type &quot;quantitative&quot;
-           :scale {:domain [450 800]}}}}
-
-     ;; minor horizontal grid
-     {:data {:values y-minor-values}
-      :mark {:type &quot;rule&quot; :color &quot;#dddddd&quot;}
-      :encoding
-      {:y {:field &quot;y&quot;
-           :type &quot;quantitative&quot;
-           :scale {:type &quot;log&quot;
-                   :domain [1.0e-4 5.0]}}}}
-
-     ;; major horizontal grid
-     {:data {:values y-major}
-      :mark {:type &quot;rule&quot; :color &quot;#bbbbbb&quot;}
-      :encoding
-      {:y {:field &quot;y&quot;
-           :type &quot;quantitative&quot;
-           :scale {:type &quot;log&quot;
-                   :domain [1.0e-4 5.0]}}}}
-
-     ;; data lines
-     {:data {:values points}
-      :mark {:type &quot;line&quot; :strokeWidth 3}
-      :encoding
-      {:x {:field &quot;temp-c&quot;
-           :type &quot;quantitative&quot;
-           :scale {:domain [450 800]}
-           :axis {:title &quot;Temperature (°C)&quot;
-                  :values (vec (range 450 801 50))
-                  :grid false
-                  :labelFontSize 15
-                  :titleFontSize 17}}
-
-       :y {:field &quot;pressure-torr&quot;
-           :type &quot;quantitative&quot;
-           :scale {:type &quot;log&quot;
-                   :domain [1.0e-4 5.0]}
-           :axis {:title &quot;Vapor pressure (Torr)&quot;
-                  :values y-major-values
-                  :grid false
-                  :labelFontSize 15
-                  :titleFontSize 17}}
-
-       :color {:field &quot;phase&quot;
-               :type &quot;nominal&quot;
-               :legend {:title nil
-                        :orient &quot;top-left&quot;
-                        :offset 8
-                        :fillColor &quot;white&quot;
-                        :strokeColor &quot;lightgray&quot;
-                        :padding 6
-                        :labelFontSize 15
-                        :symbolSize 180}}}}
-
-     ;; Melting point marker
-     {:data {:values melting-data}
-      :mark {:type &quot;circle&quot;
-             :size 100
-             :color &quot;black&quot;}
-      :encoding
-      {:x {:field &quot;temp-c&quot;
-           :type &quot;quantitative&quot;}
-       :y {:field &quot;pressure-torr&quot;
-           :type &quot;quantitative&quot;
-           :scale {:type &quot;log&quot;}}}}
-
-     ;; Melting point label
-     {:data {:values melting-data}
-      :mark {:type &quot;text&quot;
-             :color &quot;black&quot;
-             :fontSize 14
-             :align &quot;left&quot;
-             :dx 10
-             :dy 5}
-      :encoding
-      {:x {:field &quot;temp-c&quot;
-           :type &quot;quantitative&quot;}
-       :y {:field &quot;pressure-torr&quot;
-           :type &quot;quantitative&quot;
-           :scale {:type &quot;log&quot;}}
-       :text {:field &quot;label&quot;
-              :type &quot;nominal&quot;}}}]}))</code></pre></div></div><div style="margin:15px;"><div><script>vegaEmbed(document.currentScript.parentElement, {"title":{"text":"Saturated vapor pressure of antimony","orient":"bottom","anchor":"middle","fontSize":18,"offset":18},"width":800,"height":600,"layer":[{"data":{"values":[{"x":460},{"x":470},{"x":480},{"x":490},{"x":510},{"x":520},{"x":530},{"x":540},{"x":560},{"x":570},{"x":580},{"x":590},{"x":610},{"x":620},{"x":630},{"x":640},{"x":660},{"x":670},{"x":680},{"x":690},{"x":710},{"x":720},{"x":730},{"x":740},{"x":760},{"x":770},{"x":780},{"x":790}]},"mark":{"type":"rule","color":"#dddddd"},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"x":450},{"x":500},{"x":550},{"x":600},{"x":650},{"x":700},{"x":750},{"x":800}]},"mark":{"type":"rule","color":"#bbbbbb"},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"y":2.0E-4},{"y":3.0000000000000003E-4},{"y":4.0E-4},{"y":5.0E-4},{"y":6.000000000000001E-4},{"y":7.0E-4},{"y":8.0E-4},{"y":9.000000000000001E-4},{"y":0.002},{"y":0.003},{"y":0.004},{"y":0.005},{"y":0.006},{"y":0.007},{"y":0.008},{"y":0.009000000000000001},{"y":0.02},{"y":0.03},{"y":0.04},{"y":0.05},{"y":0.06},{"y":0.07},{"y":0.08},{"y":0.09},{"y":0.2},{"y":0.30000000000000004},{"y":0.4},{"y":0.5},{"y":0.6000000000000001},{"y":0.7000000000000001},{"y":0.8},{"y":0.9},{"y":2.0},{"y":3.0},{"y":4.0},{"y":5.0}]},"mark":{"type":"rule","color":"#dddddd"},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"y":1.0E-4},{"y":0.001},{"y":0.01},{"y":0.1},{"y":1.0}]},"mark":{"type":"rule","color":"#bbbbbb"},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"temp-c":450,"pressure-torr":2.160970950647115E-4,"phase":"Solid"},{"temp-c":455,"pressure-torr":2.706194186579072E-4,"phase":"Solid"},{"temp-c":460,"pressure-torr":3.3786007799556736E-4,"phase":"Solid"},{"temp-c":465,"pressure-torr":4.205423618824588E-4,"phase":"Solid"},{"temp-c":470,"pressure-torr":5.219199532640305E-4,"phase":"Solid"},{"temp-c":475,"pressure-torr":6.458697681532247E-4,"phase":"Solid"},{"temp-c":480,"pressure-torr":7.969991593290382E-4,"phase":"Solid"},{"temp-c":485,"pressure-torr":9.807694021940962E-4,"phase":"Solid"},{"temp-c":490,"pressure-torr":0.001203637592348423,"phase":"Solid"},{"temp-c":495,"pressure-torr":0.0014732193146276698,"phase":"Solid"},{"temp-c":500,"pressure-torr":0.0017984746925166707,"phase":"Solid"},{"temp-c":505,"pressure-torr":0.0021899206959313383,"phase":"Solid"},{"temp-c":510,"pressure-torr":0.0026598728753041566,"phase":"Solid"},{"temp-c":515,"pressure-torr":0.003222720001639793,"phase":"Solid"},{"temp-c":520,"pressure-torr":0.0038952354266375117,"phase":"Solid"},{"temp-c":525,"pressure-torr":0.004696929334994392,"phase":"Solid"},{"temp-c":530,"pressure-torr":0.005650446443467025,"phase":"Solid"},{"temp-c":535,"pressure-torr":0.0067820141090034255,"phase":"Solid"},{"temp-c":540,"pressure-torr":0.008121946242048006,"phase":"Solid"},{"temp-c":545,"pressure-torr":0.009705208881708704,"phase":"Solid"},{"temp-c":550,"pressure-torr":0.011572053777546097,"phase":"Solid"},{"temp-c":555,"pressure-torr":0.013768726838932861,"phase":"Solid"},{"temp-c":560,"pressure-torr":0.0163482588578051,"phase":"Solid"},{"temp-c":565,"pressure-torr":0.01937134648468969,"phase":"Solid"},{"temp-c":570,"pressure-torr":0.02290733204157585,"phase":"Solid"},{"temp-c":575,"pressure-torr":0.027035291388848068,"phase":"Solid"},{"temp-c":580,"pressure-torr":0.03184523972739676,"phase":"Solid"},{"temp-c":585,"pressure-torr":0.03743946591133807,"phase":"Solid"},{"temp-c":590,"pressure-torr":0.04393400657161133,"phase":"Solid"},{"temp-c":595,"pressure-torr":0.05146027210607574,"phase":"Solid"},{"temp-c":600,"pressure-torr":0.06016683737748908,"phase":"Solid"},{"temp-c":605,"pressure-torr":0.07022141077673377,"phase":"Solid"},{"temp-c":610,"pressure-torr":0.0818129961545345,"phase":"Solid"},{"temp-c":615,"pressure-torr":0.09515426300029443,"phase":"Solid"},{"temp-c":620,"pressure-torr":0.11048414115102706,"phase":"Solid"},{"temp-c":625,"pressure-torr":0.12807065724605748,"phase":"Solid"},{"temp-c":630,"pressure-torr":0.14821403110346132,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.15094993987587704,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.15121042296831738,"phase":"Liquid"},{"temp-c":635,"pressure-torr":0.16368869962981467,"phase":"Liquid"},{"temp-c":640,"pressure-torr":0.17903378621340457,"phase":"Liquid"},{"temp-c":645,"pressure-torr":0.19558840910525416,"phase":"Liquid"},{"temp-c":650,"pressure-torr":0.21342876032689237,"phase":"Liquid"},{"temp-c":655,"pressure-torr":0.2326344956999755,"phase":"Liquid"},{"temp-c":660,"pressure-torr":0.2532888178347968,"phase":"Liquid"},{"temp-c":665,"pressure-torr":0.2754785579361563,"phase":"Liquid"},{"temp-c":670,"pressure-torr":0.29929425631339673,"phase":"Liquid"},{"temp-c":675,"pressure-torr":0.32483024148417006,"phase":"Liquid"},{"temp-c":680,"pressure-torr":0.3521847077644891,"phase":"Liquid"},{"temp-c":685,"pressure-torr":0.38145979124078566,"phase":"Liquid"},{"temp-c":690,"pressure-torr":0.41276164402302823,"phase":"Liquid"},{"temp-c":695,"pressure-torr":0.4462005066814633,"phase":"Liquid"},{"temp-c":700,"pressure-torr":0.48189077877319314,"phase":"Liquid"},{"temp-c":705,"pressure-torr":0.5199510873685692,"phase":"Liquid"},{"temp-c":710,"pressure-torr":0.5605043534912824,"phase":"Liquid"},{"temp-c":715,"pressure-torr":0.6036778563900184,"phase":"Liquid"},{"temp-c":720,"pressure-torr":0.6496032955636418,"phase":"Liquid"},{"temp-c":725,"pressure-torr":0.698416850465999,"phase":"Liquid"},{"temp-c":730,"pressure-torr":0.7502592378206917,"phase":"Liquid"},{"temp-c":735,"pressure-torr":0.8052757664803917,"phase":"Liquid"},{"temp-c":740,"pressure-torr":0.8636163897696056,"phase":"Liquid"},{"temp-c":745,"pressure-torr":0.9254357552540864,"phase":"Liquid"},{"temp-c":750,"pressure-torr":0.9908932518844711,"phase":"Liquid"},{"temp-c":755,"pressure-torr":1.0601530544660163,"phase":"Liquid"},{"temp-c":760,"pressure-torr":1.1333841654106496,"phase":"Liquid"},{"temp-c":765,"pressure-torr":1.2107604537318875,"phase":"Liquid"},{"temp-c":770,"pressure-torr":1.2924606912474104,"phase":"Liquid"},{"temp-c":775,"pressure-torr":1.3786685859583454,"phase":"Liquid"},{"temp-c":780,"pressure-torr":1.4695728125785108,"phase":"Liquid"},{"temp-c":785,"pressure-torr":1.5653670401910313,"phase":"Liquid"},{"temp-c":790,"pressure-torr":1.6662499570137468,"phase":"Liquid"},{"temp-c":795,"pressure-torr":1.7724252922589587,"phase":"Liquid"},{"temp-c":800,"pressure-torr":1.8841018350768743,"phase":"Liquid"}]},"mark":{"type":"line","strokeWidth":3},"encoding":{"x":{"field":"temp-c","type":"quantitative","scale":{"domain":[450,800]},"axis":{"title":"Temperature (\u00b0C)","values":[450,500,550,600,650,700,750,800],"grid":false,"labelFontSize":15,"titleFontSize":17}},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]},"axis":{"title":"Vapor pressure (Torr)","values":[1.0E-4,0.001,0.01,0.1,1.0,10.0],"grid":false,"labelFontSize":15,"titleFontSize":17}},"color":{"field":"phase","type":"nominal","legend":{"title":null,"orient":"top-left","offset":8,"fillColor":"white","strokeColor":"lightgray","padding":6,"labelFontSize":15,"symbolSize":180}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"circle","size":100,"color":"black"},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"text","color":"black","fontSize":14,"align":"left","dx":10,"dy":5},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}},"text":{"field":"label","type":"nominal"}}}],"data":null});</script></div></div><div style="margin:15px;"><script>
+    :layer [(vertical-grid-layer x-minor-grid minor-grid-color minor-grid-width)
+            (vertical-grid-layer x-major-grid major-grid-color major-grid-width)
+            (horizontal-grid-layer y-minor-grid minor-grid-color minor-grid-width)
+            (horizontal-grid-layer y-major-grid major-grid-color major-grid-width)
+            data-lines-layer
+            melting-point-layer
+            melting-label-layer]}))</code></pre></div></div><div style="margin:15px;"><div><script>vegaEmbed(document.currentScript.parentElement, {"title":{"text":"Saturated vapor pressure of antimony","orient":"bottom","anchor":"middle","fontSize":18,"offset":18},"width":800,"height":600,"layer":[{"data":{"values":[{"x":460},{"x":470},{"x":480},{"x":490},{"x":510},{"x":520},{"x":530},{"x":540},{"x":560},{"x":570},{"x":580},{"x":590},{"x":610},{"x":620},{"x":630},{"x":640},{"x":660},{"x":670},{"x":680},{"x":690},{"x":710},{"x":720},{"x":730},{"x":740},{"x":760},{"x":770},{"x":780},{"x":790}]},"mark":{"type":"rule","color":"#dddddd","strokeWidth":0.6},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"x":450},{"x":500},{"x":550},{"x":600},{"x":650},{"x":700},{"x":750},{"x":800}]},"mark":{"type":"rule","color":"#bbbbbb","strokeWidth":1.2},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"y":2.0E-4},{"y":3.0000000000000003E-4},{"y":4.0E-4},{"y":5.0E-4},{"y":6.000000000000001E-4},{"y":7.0E-4},{"y":8.0E-4},{"y":9.000000000000001E-4},{"y":0.002},{"y":0.003},{"y":0.004},{"y":0.005},{"y":0.006},{"y":0.007},{"y":0.008},{"y":0.009000000000000001},{"y":0.02},{"y":0.03},{"y":0.04},{"y":0.05},{"y":0.06},{"y":0.07},{"y":0.08},{"y":0.09},{"y":0.2},{"y":0.30000000000000004},{"y":0.4},{"y":0.5},{"y":0.6000000000000001},{"y":0.7000000000000001},{"y":0.8},{"y":0.9},{"y":2.0},{"y":3.0},{"y":4.0},{"y":5.0}]},"mark":{"type":"rule","color":"#dddddd","strokeWidth":0.6},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"y":1.0E-4},{"y":0.001},{"y":0.01},{"y":0.1},{"y":1.0}]},"mark":{"type":"rule","color":"#bbbbbb","strokeWidth":1.2},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"temp-c":450,"pressure-torr":2.1269565859522414E-4,"phase":"Solid"},{"temp-c":455,"pressure-torr":2.6641761336280165E-4,"phase":"Solid"},{"temp-c":460,"pressure-torr":3.3268499454261306E-4,"phase":"Solid"},{"temp-c":465,"pressure-torr":4.1418710381063847E-4,"phase":"Solid"},{"temp-c":470,"pressure-torr":5.141376306030213E-4,"phase":"Solid"},{"temp-c":475,"pressure-torr":6.363665521745065E-4,"phase":"Solid"},{"temp-c":480,"pressure-torr":7.854262717104533E-4,"phase":"Solid"},{"temp-c":485,"pressure-torr":9.667138976781133E-4,"phase":"Solid"},{"temp-c":490,"pressure-torr":0.0011866117785469376,"phase":"Solid"},{"temp-c":495,"pressure-torr":0.0014526486359062785,"phase":"Solid"},{"temp-c":500,"pressure-torr":0.0017736838868126041,"phase":"Solid"},{"temp-c":505,"pressure-torr":0.002160118013855301,"phase":"Solid"},{"temp-c":510,"pressure-torr":0.0026241321298818873,"phase":"Solid"},{"temp-c":515,"pressure-torr":0.0031799601944995297,"phase":"Solid"},{"temp-c":520,"pressure-torr":0.0038441976722818376,"phase":"Solid"},{"temp-c":525,"pressure-torr":0.004636150778947863,"phase":"Solid"},{"temp-c":530,"pressure-torr":0.005578230842505161,"phase":"Solid"},{"temp-c":535,"pressure-torr":0.0066963987122882354,"phase":"Solid"},{"temp-c":540,"pressure-torr":0.008020664580765837,"phase":"Solid"},{"temp-c":545,"pressure-torr":0.009585649041677868,"phase":"Solid"},{"temp-c":550,"pressure-torr":0.011431211694189588,"phase":"Solid"},{"temp-c":555,"pressure-torr":0.013603154116949616,"phase":"Solid"},{"temp-c":560,"pressure-torr":0.016154004578788024,"phase":"Solid"},{"temp-c":565,"pressure-torr":0.019143892424795222,"phase":"Solid"},{"temp-c":570,"pressure-torr":0.022641520678118893,"phase":"Solid"},{"temp-c":575,"pressure-torr":0.026725246029360144,"phase":"Solid"},{"temp-c":580,"pressure-torr":0.03148427604722267,"phase":"Solid"},{"temp-c":585,"pressure-torr":0.037019994136252544,"phase":"Solid"},{"temp-c":590,"pressure-torr":0.04344742349020323,"phase":"Solid"},{"temp-c":595,"pressure-torr":0.05089684204278314,"phase":"Solid"},{"temp-c":600,"pressure-torr":0.05951556120117658,"phase":"Solid"},{"temp-c":605,"pressure-torr":0.0694698819616076,"phase":"Solid"},{"temp-c":610,"pressure-torr":0.08094724285001714,"phase":"Solid"},{"temp-c":615,"pressure-torr":0.09415857500424701,"phase":"Solid"},{"temp-c":620,"pressure-torr":0.10934088061648178,"phase":"Solid"},{"temp-c":625,"pressure-torr":0.1267600518854178,"phase":"Solid"},{"temp-c":630,"pressure-torr":0.14671394858603012,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.14942428505996938,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.15121042296831738,"phase":"Liquid"},{"temp-c":635,"pressure-torr":0.16368869962981467,"phase":"Liquid"},{"temp-c":640,"pressure-torr":0.17903378621340457,"phase":"Liquid"},{"temp-c":645,"pressure-torr":0.19558840910525416,"phase":"Liquid"},{"temp-c":650,"pressure-torr":0.21342876032689237,"phase":"Liquid"},{"temp-c":655,"pressure-torr":0.2326344956999755,"phase":"Liquid"},{"temp-c":660,"pressure-torr":0.2532888178347968,"phase":"Liquid"},{"temp-c":665,"pressure-torr":0.2754785579361563,"phase":"Liquid"},{"temp-c":670,"pressure-torr":0.29929425631339673,"phase":"Liquid"},{"temp-c":675,"pressure-torr":0.32483024148417006,"phase":"Liquid"},{"temp-c":680,"pressure-torr":0.3521847077644891,"phase":"Liquid"},{"temp-c":685,"pressure-torr":0.38145979124078566,"phase":"Liquid"},{"temp-c":690,"pressure-torr":0.41276164402302823,"phase":"Liquid"},{"temp-c":695,"pressure-torr":0.4462005066814633,"phase":"Liquid"},{"temp-c":700,"pressure-torr":0.48189077877319314,"phase":"Liquid"},{"temp-c":705,"pressure-torr":0.5199510873685692,"phase":"Liquid"},{"temp-c":710,"pressure-torr":0.5605043534912824,"phase":"Liquid"},{"temp-c":715,"pressure-torr":0.6036778563900184,"phase":"Liquid"},{"temp-c":720,"pressure-torr":0.6496032955636418,"phase":"Liquid"},{"temp-c":725,"pressure-torr":0.698416850465999,"phase":"Liquid"},{"temp-c":730,"pressure-torr":0.7502592378206917,"phase":"Liquid"},{"temp-c":735,"pressure-torr":0.8052757664803917,"phase":"Liquid"},{"temp-c":740,"pressure-torr":0.8636163897696056,"phase":"Liquid"},{"temp-c":745,"pressure-torr":0.9254357552540864,"phase":"Liquid"},{"temp-c":750,"pressure-torr":0.9908932518844711,"phase":"Liquid"},{"temp-c":755,"pressure-torr":1.0601530544660163,"phase":"Liquid"},{"temp-c":760,"pressure-torr":1.1333841654106496,"phase":"Liquid"},{"temp-c":765,"pressure-torr":1.2107604537318875,"phase":"Liquid"},{"temp-c":770,"pressure-torr":1.2924606912474104,"phase":"Liquid"},{"temp-c":775,"pressure-torr":1.3786685859583454,"phase":"Liquid"},{"temp-c":780,"pressure-torr":1.4695728125785108,"phase":"Liquid"},{"temp-c":785,"pressure-torr":1.5653670401910313,"phase":"Liquid"},{"temp-c":790,"pressure-torr":1.6662499570137468,"phase":"Liquid"},{"temp-c":795,"pressure-torr":1.7724252922589587,"phase":"Liquid"},{"temp-c":800,"pressure-torr":1.8841018350768743,"phase":"Liquid"}]},"mark":{"type":"line","strokeWidth":3},"encoding":{"x":{"field":"temp-c","type":"quantitative","scale":{"domain":[450,800]},"axis":{"title":"Temperature (\u00b0C)","values":[450,500,550,600,650,700,750,800],"grid":false,"labelFontSize":15,"titleFontSize":17}},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]},"axis":{"title":"Vapor pressure (Torr)","values":[1.0E-4,0.001,0.01,0.1,1.0],"grid":false,"labelFontSize":15,"titleFontSize":17}},"color":{"field":"phase","type":"nominal","legend":{"title":null,"orient":"top-left","offset":8,"fillColor":"white","strokeColor":"lightgray","padding":6,"labelFontSize":15,"symbolSize":180}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"circle","size":100,"color":"black"},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"text","color":"black","fontSize":14,"align":"left","dx":10,"dy":5},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}},"text":{"field":"label","type":"nominal"}}}],"data":null});</script></div></div><div style="margin:15px;"><div><ol><li>Mean Free Path and Knunsen Number</li></ol><p>The vapor is assumed to consist entirely os <span><script>katex.render("Sb_4", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>. Molecules are approximated as hard spheres.</p><span><script>katex.render("\\lambda = \\frac{k_B T}{\\sqrt{2}\\pi d^2 P}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p><span><script>katex.render("T", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("K", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>, <span><script>katex.render("d", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>, <span><script>katex.render("P", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("Pa", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>. The mean free path is returned in <span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p><span><script>katex.render("\\mathrm{Kn} = \\frac{\\lambda}{D}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p><span><script>katex.render("D", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the internal tube diameter in m.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(def boltzmann-const 1.380649e-23)</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn sb4-mean-free-path
+  [temp-c pressure-pa collision-diameter-m]
+  (let [temp-k (+ temp-c 273.15)]
+    (when-not (and (pos? temp-k)
+                   (pos? pressure-pa)
+                   (pos? collision-diameter-m))
+      (throw (ex-info &quot;Invalid gas parameters.&quot;
+                      {:temp-c temp-c
+                       :pressure-pa pressure-pa
+                       :collision-diameter-m collision-diameter-m})))
+    (/ (* boltzmann-const temp-k)
+       (* (Math/sqrt 2.0)
+          Math/PI
+          collision-diameter-m
+          collision-diameter-m
+          pressure-pa))))</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn knudsen-number
+  [mean-free-path-m tube-diameter-m]
+  (when-not (pos? tube-diameter-m)
+    (throw (ex-info &quot;Tube diameter must be positive.&quot;
+                    {:tube-diameter-m tube-diameter-m})))
+  (/ mean-free-path-m tube-diameter-m))</code></pre></div></div><div style="margin:15px;"><script>
   document.querySelectorAll('pre > code.source-clojure')
     .forEach(function (code) {
       const pre = code.parentElement;
