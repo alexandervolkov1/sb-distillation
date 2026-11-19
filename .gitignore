@@ -1,6 +1,7 @@
 # Clojure
 .cpcache/
 .clj-kondo/.cache/
+.clj-kondo/imports/
 .lsp/
 .nrepl-port
 
