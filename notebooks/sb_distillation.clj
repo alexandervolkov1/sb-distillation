@@ -3,8 +3,8 @@
 
 ;; # Vacuum Distillation of Antimony
 ;;
-;; A preliminary model of pure antimony distillation
-;; under vacuum, without carrier gas.
+;; A preliminary model of vacuum distillation
+;; of pure antimony without a carrier gas.
 ;;
 ;; ## 1. Ampoule Volume
 ;;
@@ -91,7 +91,7 @@
 ;; $$V(h) = \frac{m}{\rho}$$
 ;;
 ;; The bisection method is used over the interval
-;; $0 \leqslant h \leqslant 2r$
+;; $0 \leqslant h \leqslant 2r$.
 
 (defn liquid-height-from-mass
   [radius straight-length mass density]
@@ -104,13 +104,249 @@
       (throw (ex-info "Liquid volume is outside ampoule capacity."
                       {:volume target-volume
                        :capacity total-volume})))
-    (loop [low 0.0
-           high (* 2.0 radius)
-           steps 0]
-      (let [mid (/ (+ low high) 2.0)]
-        (if (= steps 60)
-          mid
-          (if (< (filled-volume radius straight-length mid)
-                 target-volume)
-            (recur mid high (inc steps))
-            (recur low mid (inc steps))))))))
+    (cond
+      (zero? target-volume) 0.0
+
+      (= target-volume total-volume)
+      (* 2.0 radius)
+
+      :else
+
+      (loop [low 0.0
+             high (* 2.0 radius)
+             steps 0]
+        (let [mid (/ (+ low high) 2.0)]
+          (if (= steps 60)
+            mid
+            (if (< (filled-volume radius straight-length mid)
+                   target-volume)
+              (recur mid high (inc steps))
+              (recur low mid (inc steps)))))))))
+
+;; ## 5. Saturated Vapor Pressure of Antimony
+;;
+;; The saturated vapor pressure depends on temperature and on the
+;; phase of antimony.
+;;
+;; ### 5.1. Liquid Antimony
+;;
+;; $$\log_{10}P = 2.26041 - \frac{4475.449}{T-152.352}$$
+;;
+;; $T$ is in $K$, $P$ is in $bar$.
+;; Experimental range: 785-1100 °C.
+;;
+;; Source: Jellinek and Wannow (1935).
+;; [NIST Chemistry WebBook](https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440360&Mask=4)
+
+(defn sb-liquid-vapor-pressure
+  [temp-c]
+  (let [temp-k (+ temp-c 273.15)
+        pressure-bar
+        (Math/pow 10.0
+                  (- 2.26041
+                     (/ 4475.449 (- temp-k 152.352))))]
+    (* 1.0e5 pressure-bar)))
+
+;; ### 5.2. Solid Antimony
+;;
+;; $$\log_{10}P = 10.571 - \frac{10300}{T}$$
+;;
+;; $T$ is in $K$, $P$ is in $Torr$.
+;; Experimental range: 420-550 °C.
+;;
+;; Source: Rosenblatt and Birchenall (1961).
+;; [Journal of Chemical Physics](https://doi.org/10.1063/1.1701217)
+
+(defn sb-solid-vapor-pressure
+  [temp-c]
+  (let [temp-k (+ temp-c 273.5)
+        pressure-torr
+        (Math/pow 10.0
+                  (- 10.571 (/ 10300.0 temp-k)))]
+    (* 133.32236842105263 pressure-torr)))
+
+;; ### 5.3. Saturated Vapor Pressure
+;;
+;; Temperature range: 450-800 °C.
+;; Logarithmic pressure scale.
+;; Values outside the experimental ranges are extrapolated.
+
+(defn pa-to-torr
+  [pressure-pa]
+  (/ pressure-pa 133.32236842105263))
+
+(let [melting-point 630.63
+
+      points
+      (vec
+       (concat
+        (for [temp-c (concat (range 450 631 5) [melting-point])]
+          {:temp-c temp-c
+           :pressure-torr
+           (pa-to-torr (sb-solid-vapor-pressure temp-c))
+           :phase "Solid"})
+
+        (for [temp-c (concat [melting-point] (range 635 801 5))]
+          {:temp-c temp-c
+           :pressure-torr
+           (pa-to-torr (sb-liquid-vapor-pressure temp-c))
+           :phase "Liquid"})))
+
+      x-major
+      (mapv (fn [x] {:x x}) (range 450 801 50))
+
+      x-minor
+      (mapv (fn [x] {:x x})
+            (remove #(zero? (mod % 50))
+                    (range 450 801 10)))
+
+      y-major-values
+      [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]
+
+      y-minor-values
+      (->> (for [exp (range -4 1)
+                 m (range 2 10)]
+             (* m (Math/pow 10.0 exp)))
+           (filter #(<= % 5.0))
+           (mapv (fn [y] {:y y})))
+
+      y-major
+      (mapv (fn [y] {:y y})
+            (filter #(<= % 5.0) y-major-values))
+
+      melting-data
+      [{:temp-c melting-point
+        :pressure-torr
+        (pa-to-torr (sb-liquid-vapor-pressure melting-point))
+        :label "melting point"}]]
+
+  (kind/vega-lite
+   {:title {:text "Saturated vapor pressure of antimony"
+            :orient "bottom"
+            :anchor "middle"
+            :fontSize 18
+            :offset 18}
+
+    :width 800
+    :height 600
+
+    :layer
+
+    [;; minor vertical grid
+     {:data {:values x-minor}
+      :mark {:type "rule" :color "#dddddd"}
+      :encoding
+      {:x {:field "x"
+           :type "quantitative"
+           :scale {:domain [450 800]}}}}
+
+     ;; major vertical grid
+     {:data {:values x-major}
+      :mark {:type "rule" :color "#bbbbbb"}
+      :encoding
+      {:x {:field "x"
+           :type "quantitative"
+           :scale {:domain [450 800]}}}}
+
+     ;; minor horizontal grid
+     {:data {:values y-minor-values}
+      :mark {:type "rule" :color "#dddddd"}
+      :encoding
+      {:y {:field "y"
+           :type "quantitative"
+           :scale {:type "log"
+                   :domain [1.0e-4 5.0]}}}}
+
+     ;; major horizontal grid
+     {:data {:values y-major}
+      :mark {:type "rule" :color "#bbbbbb"}
+      :encoding
+      {:y {:field "y"
+           :type "quantitative"
+           :scale {:type "log"
+                   :domain [1.0e-4 5.0]}}}}
+
+     ;; data lines
+     {:data {:values points}
+      :mark {:type "line" :strokeWidth 3}
+      :encoding
+      {:x {:field "temp-c"
+           :type "quantitative"
+           :scale {:domain [450 800]}
+           :axis {:title "Temperature (°C)"
+                  :values (vec (range 450 801 50))
+                  :grid false
+                  :labelFontSize 15
+                  :titleFontSize 17}}
+
+       :y {:field "pressure-torr"
+           :type "quantitative"
+           :scale {:type "log"
+                   :domain [1.0e-4 5.0]}
+           :axis {:title "Vapor pressure (Torr)"
+                  :values y-major-values
+                  :grid false
+                  :labelFontSize 15
+                  :titleFontSize 17}}
+
+       :color {:field "phase"
+               :type "nominal"
+               :legend {:title nil
+                        :orient "top-left"
+                        :offset 8
+                        :fillColor "white"
+                        :strokeColor "lightgray"
+                        :padding 6
+                        :labelFontSize 15
+                        :symbolSize 180}}}}
+
+     ;; Melting point marker
+     {:data {:values melting-data}
+      :mark {:type "circle"
+             :size 100
+             :color "black"}
+      :encoding
+      {:x {:field "temp-c"
+           :type "quantitative"}
+       :y {:field "pressure-torr"
+           :type "quantitative"
+           :scale {:type "log"}}}}
+
+     ;; Melting point label
+     {:data {:values melting-data}
+      :mark {:type "text"
+             :color "black"
+             :fontSize 14
+             :align "left"
+             :dx 10
+             :dy 5}
+      :encoding
+      {:x {:field "temp-c"
+           :type "quantitative"}
+       :y {:field "pressure-torr"
+           :type "quantitative"
+           :scale {:type "log"}}
+       :text {:field "label"
+              :type "nominal"}}}]}))
+
+^:kindly/hide-code
+(kind/hiccup
+ [:script
+  "
+  document.querySelectorAll('pre > code.source-clojure')
+    .forEach(function (code) {
+      const pre = code.parentElement;
+
+      if (pre.closest('details')) return;
+
+      const details = document.createElement('details');
+      details.open = true;
+      const summary = document.createElement('summary');
+
+      summary.textContent = 'Code';
+      summary.style.cursor = 'pointer';
+
+      pre.replaceWith(details);
+      details.append(summary, pre);
+    });
+  "])

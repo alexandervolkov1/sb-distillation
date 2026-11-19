@@ -46,9 +46,9 @@
 </style>
 <link href="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.css" rel="stylesheet" type="text/css" />
 <title>Clay</title></head><body data-spy="scroll" data-target="#toc" style="border:;margin:auto;">
-<script src="https://code.jquery.com/jquery-3.6.0.min.js" type="text/javascript"></script><script src="https://code.jquery.com/ui/1.13.1/jquery-ui.min.js" type="text/javascript"></script><script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" type="text/javascript"></script>
+<script src="https://code.jquery.com/jquery-3.6.0.min.js" type="text/javascript"></script><script src="https://code.jquery.com/ui/1.13.1/jquery-ui.min.js" type="text/javascript"></script><script src="https://cdn.jsdelivr.net/npm/katex@0.16.10/dist/katex.min.js" type="text/javascript"></script><script src="https://cdn.jsdelivr.net/npm/vega@6.2.0" type="text/javascript"></script><script src="https://cdn.jsdelivr.net/npm/vega-lite@6.4.2" type="text/javascript"></script><script src="https://cdn.jsdelivr.net/npm/vega-embed@7.1.0" type="text/javascript"></script>
 <div class="container"><div class="row"><div class="col-sm-12"><div><div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(ns sb-distillation
-  (:require [scicloj.kindly.v4.kind :as kind]))</code></pre></div></div><div style="margin:15px;"><div><h1 id="vacuum-distillation-of-antimony">Vacuum Distillation of Antimony</h1><p>A preliminary model of pure antimony distillation under vacuum, without carrier gas.</p><h2 id="1.-ampoule-volume">1. Ampoule Volume</h2><p>The ampoule consists of a cylindrical section and two hemispherical end caps. The internal volume of the ampoule [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\pi r^2 L + \\frac{4}{3}\\pi r^3", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the internal radius [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("L", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the straight cylindrical length [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn amp-volume
+  (:require [scicloj.kindly.v4.kind :as kind]))</code></pre></div></div><div style="margin:15px;"><div><h1 id="vacuum-distillation-of-antimony">Vacuum Distillation of Antimony</h1><p>A preliminary model of vacuum distillation of pure antimony without a carrier gas.</p><h2 id="1.-ampoule-volume">1. Ampoule Volume</h2><p>The ampoule consists of a cylindrical section and two hemispherical end caps. The internal volume of the ampoule [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\pi r^2 L + \\frac{4}{3}\\pi r^3", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the internal radius [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("L", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the straight cylindrical length [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn amp-volume
   [radius straight-length]
   (+ (* Math/PI radius radius straight-length)
      (* 4/3 Math/PI radius radius radius)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="2.-liquid-fill-volume">2. Liquid Fill Volume</h2><p>The ampoule is horizontal, and the liquid surface is assumed to be flat. The fill height <span><script>katex.render("h", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is measured from the bottom. The liquid volume consists of two parts:</p><ul><li>the volume within the cylindrical section;</li><li>the combined volume within the two hemispherical end caps.</li></ul><p>The cross-sectional area of the liquid-filled segment in the cylindrical section of the ampoule [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("A(h) = r^2\\arccos\\left(\\frac{r-h}{r}\\right)\n- (r-h)\\sqrt{2rh-h^2}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The total liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V(h) = L A(h) + \\pi h^2\\left(r-\\frac{h}{3}\\right)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn filled-volume
@@ -68,7 +68,7 @@
   (let [a-squared (* liquid-height (- (* 2.0 radius) liquid-height))
         cylinder-area (* 2.0 straight-length (Math/sqrt a-squared))
         end-caps-area (* Math/PI a-squared)]
-    (+ cylinder-area end-caps-area)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="4.-liquid-height-from-mass">4. Liquid Height from Mass</h2><p>For a given liquid mass and density, the liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid mass [<span><script>katex.render("kg", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("\\rho", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid density [<span><script>katex.render("kg\/m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul><p>The liquid height is calculated by solving:</p><span><script>katex.render("V(h) = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The bisection method is used over the interval <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-height-from-mass
+    (+ cylinder-area end-caps-area)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="4.-liquid-height-from-mass">4. Liquid Height from Mass</h2><p>For a given liquid mass and density, the liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid mass [<span><script>katex.render("kg", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("\\rho", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid density [<span><script>katex.render("kg\/m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul><p>The liquid height is calculated by solving:</p><span><script>katex.render("V(h) = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The bisection method is used over the interval <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-height-from-mass
   [radius straight-length mass density]
   (when-not (pos? density)
     (throw (ex-info &quot;Density must be positive.&quot;
@@ -79,16 +79,208 @@
       (throw (ex-info &quot;Liquid volume is outside ampoule capacity.&quot;
                       {:volume target-volume
                        :capacity total-volume})))
-    (loop [low 0.0
-           high (* 2.0 radius)
-           steps 0]
-      (let [mid (/ (+ low high) 2.0)]
-        (if (= steps 60)
-          mid
-          (if (&lt; (filled-volume radius straight-length mid)
-                 target-volume)
-            (recur mid high (inc steps))
-            (recur low mid (inc steps))))))))</code></pre></div></div><div style="margin:15px;"><div style="background-color:grey;height:2px;width:100%;"></div></div><div style="margin:15px;"><div></div></div></div></div></div></div></div><script type="text/javascript">/*!
+    (cond
+      (zero? target-volume) 0.0
+
+      (= target-volume total-volume)
+      (* 2.0 radius)
+
+      :else
+
+      (loop [low 0.0
+             high (* 2.0 radius)
+             steps 0]
+        (let [mid (/ (+ low high) 2.0)]
+          (if (= steps 60)
+            mid
+            (if (&lt; (filled-volume radius straight-length mid)
+                   target-volume)
+              (recur mid high (inc steps))
+              (recur low mid (inc steps)))))))))</code></pre></div></div><div style="margin:15px;"><div><h2 id="5.-saturated-vapor-pressure-of-antimony">5. Saturated Vapor Pressure of Antimony</h2><p>The saturated vapor pressure depends on temperature and on the phase of antimony.</p><h3 id="5.1.-liquid-antimony">5.1. Liquid Antimony</h3><span><script>katex.render("\\log_{10}P = 2.26041 - \\frac{4475.449}{T-152.352}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p><span><script>katex.render("T", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("K", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>, <span><script>katex.render("P", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("bar", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>. Experimental range: 785-1100 °C.</p><p>Source: Jellinek and Wannow (1935). <a href="https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440360&amp;Mask=4">NIST Chemistry WebBook</a></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn sb-liquid-vapor-pressure
+  [temp-c]
+  (let [temp-k (+ temp-c 273.15)
+        pressure-bar
+        (Math/pow 10.0
+                  (- 2.26041
+                     (/ 4475.449 (- temp-k 152.352))))]
+    (* 1.0e5 pressure-bar)))</code></pre></div></div><div style="margin:15px;"><div><h3 id="5.2.-solid-antimony">5.2. Solid Antimony</h3><span><script>katex.render("\\log_{10}P = 10.571 - \\frac{10300}{T}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p><span><script>katex.render("T", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("K", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>, <span><script>katex.render("P", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is in <span><script>katex.render("Torr", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>. Experimental range: 420-550 °C.</p><p>Source: Rosenblatt and Birchenall (1961). <a href="https://doi.org/10.1063/1.1701217">Journal of Chemical Physics</a></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn sb-solid-vapor-pressure
+  [temp-c]
+  (let [temp-k (+ temp-c 273.5)
+        pressure-torr
+        (Math/pow 10.0
+                  (- 10.571 (/ 10300.0 temp-k)))]
+    (* 133.32236842105263 pressure-torr)))</code></pre></div></div><div style="margin:15px;"><div><h3 id="5.3.-saturated-vapor-pressure">5.3. Saturated Vapor Pressure</h3><p>Temperature range: 450-800 °C. Logarithmic pressure scale. Values outside the experimental ranges are extrapolated.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn pa-to-torr
+  [pressure-pa]
+  (/ pressure-pa 133.32236842105263))</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [melting-point 630.63
+
+      points
+      (vec
+       (concat
+        (for [temp-c (concat (range 450 631 5) [melting-point])]
+          {:temp-c temp-c
+           :pressure-torr
+           (pa-to-torr (sb-solid-vapor-pressure temp-c))
+           :phase &quot;Solid&quot;})
+
+        (for [temp-c (concat [melting-point] (range 635 801 5))]
+          {:temp-c temp-c
+           :pressure-torr
+           (pa-to-torr (sb-liquid-vapor-pressure temp-c))
+           :phase &quot;Liquid&quot;})))
+
+      x-major
+      (mapv (fn [x] {:x x}) (range 450 801 50))
+
+      x-minor
+      (mapv (fn [x] {:x x})
+            (remove #(zero? (mod % 50))
+                    (range 450 801 10)))
+
+      y-major-values
+      [1.0e-4 1.0e-3 1.0e-2 1.0e-1 1.0 10.0]
+
+      y-minor-values
+      (-&gt;&gt; (for [exp (range -4 1)
+                 m (range 2 10)]
+             (* m (Math/pow 10.0 exp)))
+           (filter #(&lt;= % 5.0))
+           (mapv (fn [y] {:y y})))
+
+      y-major
+      (mapv (fn [y] {:y y})
+            (filter #(&lt;= % 5.0) y-major-values))
+
+      melting-data
+      [{:temp-c melting-point
+        :pressure-torr
+        (pa-to-torr (sb-liquid-vapor-pressure melting-point))
+        :label &quot;melting point&quot;}]]
+
+  (kind/vega-lite
+   {:title {:text &quot;Saturated vapor pressure of antimony&quot;
+            :orient &quot;bottom&quot;
+            :anchor &quot;middle&quot;
+            :fontSize 18
+            :offset 18}
+
+    :width 800
+    :height 600
+
+    :layer
+
+    [;; minor vertical grid
+     {:data {:values x-minor}
+      :mark {:type &quot;rule&quot; :color &quot;#dddddd&quot;}
+      :encoding
+      {:x {:field &quot;x&quot;
+           :type &quot;quantitative&quot;
+           :scale {:domain [450 800]}}}}
+
+     ;; major vertical grid
+     {:data {:values x-major}
+      :mark {:type &quot;rule&quot; :color &quot;#bbbbbb&quot;}
+      :encoding
+      {:x {:field &quot;x&quot;
+           :type &quot;quantitative&quot;
+           :scale {:domain [450 800]}}}}
+
+     ;; minor horizontal grid
+     {:data {:values y-minor-values}
+      :mark {:type &quot;rule&quot; :color &quot;#dddddd&quot;}
+      :encoding
+      {:y {:field &quot;y&quot;
+           :type &quot;quantitative&quot;
+           :scale {:type &quot;log&quot;
+                   :domain [1.0e-4 5.0]}}}}
+
+     ;; major horizontal grid
+     {:data {:values y-major}
+      :mark {:type &quot;rule&quot; :color &quot;#bbbbbb&quot;}
+      :encoding
+      {:y {:field &quot;y&quot;
+           :type &quot;quantitative&quot;
+           :scale {:type &quot;log&quot;
+                   :domain [1.0e-4 5.0]}}}}
+
+     ;; data lines
+     {:data {:values points}
+      :mark {:type &quot;line&quot; :strokeWidth 3}
+      :encoding
+      {:x {:field &quot;temp-c&quot;
+           :type &quot;quantitative&quot;
+           :scale {:domain [450 800]}
+           :axis {:title &quot;Temperature (°C)&quot;
+                  :values (vec (range 450 801 50))
+                  :grid false
+                  :labelFontSize 15
+                  :titleFontSize 17}}
+
+       :y {:field &quot;pressure-torr&quot;
+           :type &quot;quantitative&quot;
+           :scale {:type &quot;log&quot;
+                   :domain [1.0e-4 5.0]}
+           :axis {:title &quot;Vapor pressure (Torr)&quot;
+                  :values y-major-values
+                  :grid false
+                  :labelFontSize 15
+                  :titleFontSize 17}}
+
+       :color {:field &quot;phase&quot;
+               :type &quot;nominal&quot;
+               :legend {:title nil
+                        :orient &quot;top-left&quot;
+                        :offset 8
+                        :fillColor &quot;white&quot;
+                        :strokeColor &quot;lightgray&quot;
+                        :padding 6
+                        :labelFontSize 15
+                        :symbolSize 180}}}}
+
+     ;; Melting point marker
+     {:data {:values melting-data}
+      :mark {:type &quot;circle&quot;
+             :size 100
+             :color &quot;black&quot;}
+      :encoding
+      {:x {:field &quot;temp-c&quot;
+           :type &quot;quantitative&quot;}
+       :y {:field &quot;pressure-torr&quot;
+           :type &quot;quantitative&quot;
+           :scale {:type &quot;log&quot;}}}}
+
+     ;; Melting point label
+     {:data {:values melting-data}
+      :mark {:type &quot;text&quot;
+             :color &quot;black&quot;
+             :fontSize 14
+             :align &quot;left&quot;
+             :dx 10
+             :dy 5}
+      :encoding
+      {:x {:field &quot;temp-c&quot;
+           :type &quot;quantitative&quot;}
+       :y {:field &quot;pressure-torr&quot;
+           :type &quot;quantitative&quot;
+           :scale {:type &quot;log&quot;}}
+       :text {:field &quot;label&quot;
+              :type &quot;nominal&quot;}}}]}))</code></pre></div></div><div style="margin:15px;"><div><script>vegaEmbed(document.currentScript.parentElement, {"title":{"text":"Saturated vapor pressure of antimony","orient":"bottom","anchor":"middle","fontSize":18,"offset":18},"width":800,"height":600,"layer":[{"data":{"values":[{"x":460},{"x":470},{"x":480},{"x":490},{"x":510},{"x":520},{"x":530},{"x":540},{"x":560},{"x":570},{"x":580},{"x":590},{"x":610},{"x":620},{"x":630},{"x":640},{"x":660},{"x":670},{"x":680},{"x":690},{"x":710},{"x":720},{"x":730},{"x":740},{"x":760},{"x":770},{"x":780},{"x":790}]},"mark":{"type":"rule","color":"#dddddd"},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"x":450},{"x":500},{"x":550},{"x":600},{"x":650},{"x":700},{"x":750},{"x":800}]},"mark":{"type":"rule","color":"#bbbbbb"},"encoding":{"x":{"field":"x","type":"quantitative","scale":{"domain":[450,800]}}}},{"data":{"values":[{"y":2.0E-4},{"y":3.0000000000000003E-4},{"y":4.0E-4},{"y":5.0E-4},{"y":6.000000000000001E-4},{"y":7.0E-4},{"y":8.0E-4},{"y":9.000000000000001E-4},{"y":0.002},{"y":0.003},{"y":0.004},{"y":0.005},{"y":0.006},{"y":0.007},{"y":0.008},{"y":0.009000000000000001},{"y":0.02},{"y":0.03},{"y":0.04},{"y":0.05},{"y":0.06},{"y":0.07},{"y":0.08},{"y":0.09},{"y":0.2},{"y":0.30000000000000004},{"y":0.4},{"y":0.5},{"y":0.6000000000000001},{"y":0.7000000000000001},{"y":0.8},{"y":0.9},{"y":2.0},{"y":3.0},{"y":4.0},{"y":5.0}]},"mark":{"type":"rule","color":"#dddddd"},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"y":1.0E-4},{"y":0.001},{"y":0.01},{"y":0.1},{"y":1.0}]},"mark":{"type":"rule","color":"#bbbbbb"},"encoding":{"y":{"field":"y","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]}}}},{"data":{"values":[{"temp-c":450,"pressure-torr":2.160970950647115E-4,"phase":"Solid"},{"temp-c":455,"pressure-torr":2.706194186579072E-4,"phase":"Solid"},{"temp-c":460,"pressure-torr":3.3786007799556736E-4,"phase":"Solid"},{"temp-c":465,"pressure-torr":4.205423618824588E-4,"phase":"Solid"},{"temp-c":470,"pressure-torr":5.219199532640305E-4,"phase":"Solid"},{"temp-c":475,"pressure-torr":6.458697681532247E-4,"phase":"Solid"},{"temp-c":480,"pressure-torr":7.969991593290382E-4,"phase":"Solid"},{"temp-c":485,"pressure-torr":9.807694021940962E-4,"phase":"Solid"},{"temp-c":490,"pressure-torr":0.001203637592348423,"phase":"Solid"},{"temp-c":495,"pressure-torr":0.0014732193146276698,"phase":"Solid"},{"temp-c":500,"pressure-torr":0.0017984746925166707,"phase":"Solid"},{"temp-c":505,"pressure-torr":0.0021899206959313383,"phase":"Solid"},{"temp-c":510,"pressure-torr":0.0026598728753041566,"phase":"Solid"},{"temp-c":515,"pressure-torr":0.003222720001639793,"phase":"Solid"},{"temp-c":520,"pressure-torr":0.0038952354266375117,"phase":"Solid"},{"temp-c":525,"pressure-torr":0.004696929334994392,"phase":"Solid"},{"temp-c":530,"pressure-torr":0.005650446443467025,"phase":"Solid"},{"temp-c":535,"pressure-torr":0.0067820141090034255,"phase":"Solid"},{"temp-c":540,"pressure-torr":0.008121946242048006,"phase":"Solid"},{"temp-c":545,"pressure-torr":0.009705208881708704,"phase":"Solid"},{"temp-c":550,"pressure-torr":0.011572053777546097,"phase":"Solid"},{"temp-c":555,"pressure-torr":0.013768726838932861,"phase":"Solid"},{"temp-c":560,"pressure-torr":0.0163482588578051,"phase":"Solid"},{"temp-c":565,"pressure-torr":0.01937134648468969,"phase":"Solid"},{"temp-c":570,"pressure-torr":0.02290733204157585,"phase":"Solid"},{"temp-c":575,"pressure-torr":0.027035291388848068,"phase":"Solid"},{"temp-c":580,"pressure-torr":0.03184523972739676,"phase":"Solid"},{"temp-c":585,"pressure-torr":0.03743946591133807,"phase":"Solid"},{"temp-c":590,"pressure-torr":0.04393400657161133,"phase":"Solid"},{"temp-c":595,"pressure-torr":0.05146027210607574,"phase":"Solid"},{"temp-c":600,"pressure-torr":0.06016683737748908,"phase":"Solid"},{"temp-c":605,"pressure-torr":0.07022141077673377,"phase":"Solid"},{"temp-c":610,"pressure-torr":0.0818129961545345,"phase":"Solid"},{"temp-c":615,"pressure-torr":0.09515426300029443,"phase":"Solid"},{"temp-c":620,"pressure-torr":0.11048414115102706,"phase":"Solid"},{"temp-c":625,"pressure-torr":0.12807065724605748,"phase":"Solid"},{"temp-c":630,"pressure-torr":0.14821403110346132,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.15094993987587704,"phase":"Solid"},{"temp-c":630.63,"pressure-torr":0.15121042296831738,"phase":"Liquid"},{"temp-c":635,"pressure-torr":0.16368869962981467,"phase":"Liquid"},{"temp-c":640,"pressure-torr":0.17903378621340457,"phase":"Liquid"},{"temp-c":645,"pressure-torr":0.19558840910525416,"phase":"Liquid"},{"temp-c":650,"pressure-torr":0.21342876032689237,"phase":"Liquid"},{"temp-c":655,"pressure-torr":0.2326344956999755,"phase":"Liquid"},{"temp-c":660,"pressure-torr":0.2532888178347968,"phase":"Liquid"},{"temp-c":665,"pressure-torr":0.2754785579361563,"phase":"Liquid"},{"temp-c":670,"pressure-torr":0.29929425631339673,"phase":"Liquid"},{"temp-c":675,"pressure-torr":0.32483024148417006,"phase":"Liquid"},{"temp-c":680,"pressure-torr":0.3521847077644891,"phase":"Liquid"},{"temp-c":685,"pressure-torr":0.38145979124078566,"phase":"Liquid"},{"temp-c":690,"pressure-torr":0.41276164402302823,"phase":"Liquid"},{"temp-c":695,"pressure-torr":0.4462005066814633,"phase":"Liquid"},{"temp-c":700,"pressure-torr":0.48189077877319314,"phase":"Liquid"},{"temp-c":705,"pressure-torr":0.5199510873685692,"phase":"Liquid"},{"temp-c":710,"pressure-torr":0.5605043534912824,"phase":"Liquid"},{"temp-c":715,"pressure-torr":0.6036778563900184,"phase":"Liquid"},{"temp-c":720,"pressure-torr":0.6496032955636418,"phase":"Liquid"},{"temp-c":725,"pressure-torr":0.698416850465999,"phase":"Liquid"},{"temp-c":730,"pressure-torr":0.7502592378206917,"phase":"Liquid"},{"temp-c":735,"pressure-torr":0.8052757664803917,"phase":"Liquid"},{"temp-c":740,"pressure-torr":0.8636163897696056,"phase":"Liquid"},{"temp-c":745,"pressure-torr":0.9254357552540864,"phase":"Liquid"},{"temp-c":750,"pressure-torr":0.9908932518844711,"phase":"Liquid"},{"temp-c":755,"pressure-torr":1.0601530544660163,"phase":"Liquid"},{"temp-c":760,"pressure-torr":1.1333841654106496,"phase":"Liquid"},{"temp-c":765,"pressure-torr":1.2107604537318875,"phase":"Liquid"},{"temp-c":770,"pressure-torr":1.2924606912474104,"phase":"Liquid"},{"temp-c":775,"pressure-torr":1.3786685859583454,"phase":"Liquid"},{"temp-c":780,"pressure-torr":1.4695728125785108,"phase":"Liquid"},{"temp-c":785,"pressure-torr":1.5653670401910313,"phase":"Liquid"},{"temp-c":790,"pressure-torr":1.6662499570137468,"phase":"Liquid"},{"temp-c":795,"pressure-torr":1.7724252922589587,"phase":"Liquid"},{"temp-c":800,"pressure-torr":1.8841018350768743,"phase":"Liquid"}]},"mark":{"type":"line","strokeWidth":3},"encoding":{"x":{"field":"temp-c","type":"quantitative","scale":{"domain":[450,800]},"axis":{"title":"Temperature (\u00b0C)","values":[450,500,550,600,650,700,750,800],"grid":false,"labelFontSize":15,"titleFontSize":17}},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log","domain":[1.0E-4,5.0]},"axis":{"title":"Vapor pressure (Torr)","values":[1.0E-4,0.001,0.01,0.1,1.0,10.0],"grid":false,"labelFontSize":15,"titleFontSize":17}},"color":{"field":"phase","type":"nominal","legend":{"title":null,"orient":"top-left","offset":8,"fillColor":"white","strokeColor":"lightgray","padding":6,"labelFontSize":15,"symbolSize":180}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"circle","size":100,"color":"black"},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}}}},{"data":{"values":[{"temp-c":630.63,"pressure-torr":0.15121042296831738,"label":"melting point"}]},"mark":{"type":"text","color":"black","fontSize":14,"align":"left","dx":10,"dy":5},"encoding":{"x":{"field":"temp-c","type":"quantitative"},"y":{"field":"pressure-torr","type":"quantitative","scale":{"type":"log"}},"text":{"field":"label","type":"nominal"}}}],"data":null});</script></div></div><div style="margin:15px;"><script>
+  document.querySelectorAll('pre > code.source-clojure')
+    .forEach(function (code) {
+      const pre = code.parentElement;
+
+      if (pre.closest('details')) return;
+
+      const details = document.createElement('details');
+      details.open = true;
+      const summary = document.createElement('summary');
+
+      summary.textContent = 'Code';
+      summary.style.cursor = 'pointer';
+
+      pre.replaceWith(details);
+      details.append(summary, pre);
+    });
+  </script></div><div style="margin:15px;"><div style="background-color:grey;height:2px;width:100%;"></div></div><div style="margin:15px;"><div></div></div></div></div></div></div></div><script type="text/javascript">/*!
   Highlight.js v11.9.0 (git: b7ec4bfafc)
   (c) 2006-2023 undefined and other contributors
   License: BSD-3-Clause
