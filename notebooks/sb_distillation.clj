@@ -25,9 +25,9 @@
 
 ;; ## 2. Liquid Fill Volume
 ;;
-;; The ampoule is horisontal, and the liquid surface is assumed
+;; The ampoule is horizontal, and the liquid surface is assumed
 ;; to be flat. The fill height $h$ [$m$] is measured from the bottom.
-;;  The liquid volume consists of two parts:
+;; The liquid volume consists of two parts:
 ;; - the volume within the cylindrical section;
 ;; - the combined volume within the two hemispherical end caps.
 ;;
@@ -41,7 +41,7 @@
 ;;
 ;; $$V(h) = L A(h) + \pi h^2\left(r-\frac{h}{3}\right)$$
 ;;
-;; Valid for $0 \leq h \leq 2r$.
+;; Valid for $0 \leqslant h \leqslant 2r$.
 
 (defn filled-volume
   [radius straight-length liquid-height]
@@ -57,14 +57,50 @@
            (- radius (/ liquid-height 3.0)))]
     (+ cylinder-volume end-caps-volume)))
 
-;; The small test:
+;; Basic consistency check:
 
-(let [r 0.03
-      l 0.18
-      total (amp-volume r l)
-      volume (fn [h] (filled-volume r l h))
+(let [radius 0.03
+      straight-length 0.18
+      total-volume (amp-volume radius straight-length)
+      volume (fn [liquid-height]
+               (filled-volume radius straight-length liquid-height))
       eps 1.0e-12]
   (assert (< (Math/abs (volume 0.0)) eps))
-  (assert (< (Math/abs (- (volume r) (/ total 2.0))) eps))
-  (assert (< (Math/abs (- (volume (* 2.0 r)) total)) eps))
+  (assert (< (Math/abs (- (volume radius) (/ total-volume 2.0))) eps))
+  (assert (< (Math/abs (- (volume (* 2.0 radius)) total-volume)) eps))
+  :ok)
+
+;; ## 3. Liquid Surface Area
+;;
+;; The free surface of the liquid consists of two parts:
+;; - a rectangular area within the cylindrical section;
+;; - two semicircular areas within the hemispherical end caps.
+;;
+;; The total liquid surface area [$m^2$] is:
+;;
+;; $$S(h) = 2L\sqrt{2rh-h^2} + \pi(2rh-h^2)$$
+;;
+;; Valid for $0 \leqslant h \leqslant 2r$
+
+(defn liquid-surface-area
+  [radius straight-length liquid-height]
+  (let [a (* liquid-height (- (* 2.0 radius) liquid-height))
+        cylinder-area (* 2.0 straight-length (Math/sqrt a))
+        end-caps-area (* Math/PI a)]
+    (+ cylinder-area end-caps-area)))
+
+;; Basic consistency check:
+
+(let [radius 0.03
+      straight-length 0.18
+      liquid-area (fn [liquid-height]
+                    (liquid-surface-area radius
+                                         straight-length
+                                         liquid-height))
+      max-area (+ (* 2.0 radius straight-length)
+                  (* Math/PI radius radius))
+      eps 1.0e-12]
+  (assert (< (Math/abs (liquid-area 0.0)) eps))
+  (assert (< (Math/abs (- (liquid-area radius) max-area)) eps))
+  (assert (< (Math/abs (liquid-area (* 2.0 radius))) eps))
   :ok)

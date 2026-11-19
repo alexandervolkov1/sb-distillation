@@ -51,7 +51,7 @@
   (:require [scicloj.kindly.v4.kind :as kind]))</code></pre></div></div><div style="margin:15px;"><div><h1 id="vacuum-distillation-of-antimony">Vacuum Distillation of Antimony</h1><p>A preliminary model of pure antimony distillation under vacuum, without carrier gas.</p><h2 id="1.-ampoule-volume">1. Ampoule Volume</h2><p>The ampoule consists of a cylindrical section and two hemispherical end caps. The internal volume of the ampoule [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\pi r^2 L + \\frac{4}{3}\\pi r^3", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the internal radius [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("L", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the straight cylindrical length [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn amp-volume
   [radius straight-length]
   (+ (* Math/PI radius radius straight-length)
-     (* 4/3 Math/PI radius radius radius)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="2.-liquid-fill-volume">2. Liquid Fill Volume</h2><p>The ampoule is horisontal, and the liquid surface is assumed to be flat. The fill height <span><script>katex.render("h", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is measured from the bottom. The liquid volume consists of two parts:</p><ul><li>the volume within the cylindrical section;</li><li>the combined volume within the two hemispherical end caps.</li></ul><p>The cross-sectional area of the liquid-filled segment in the cylindrical section of the ampoule [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("A(h) = r^2\\arccos\\left(\\frac{r-h}{r}\\right)\n- (r-h)\\sqrt{2rh-h^2}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The total liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V(h) = L A(h) + \\pi h^2\\left(r-\\frac{h}{3}\\right)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leq h \\leq 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn filled-volume
+     (* 4/3 Math/PI radius radius radius)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="2.-liquid-fill-volume">2. Liquid Fill Volume</h2><p>The ampoule is horizontal, and the liquid surface is assumed to be flat. The fill height <span><script>katex.render("h", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> [<span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is measured from the bottom. The liquid volume consists of two parts:</p><ul><li>the volume within the cylindrical section;</li><li>the combined volume within the two hemispherical end caps.</li></ul><p>The cross-sectional area of the liquid-filled segment in the cylindrical section of the ampoule [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("A(h) = r^2\\arccos\\left(\\frac{r-h}{r}\\right)\n- (r-h)\\sqrt{2rh-h^2}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The total liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V(h) = L A(h) + \\pi h^2\\left(r-\\frac{h}{3}\\right)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn filled-volume
   [radius straight-length liquid-height]
   (let [cylinder-volume
         (* straight-length
@@ -63,14 +63,33 @@
         end-caps-volume
         (* Math/PI liquid-height liquid-height
            (- radius (/ liquid-height 3.0)))]
-    (+ cylinder-volume end-caps-volume)))</code></pre></div></div><div style="margin:15px;"><div><p>The small test:</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [r 0.03
-      l 0.18
-      total (amp-volume r l)
-      volume (fn [h] (filled-volume r l h))
+    (+ cylinder-volume end-caps-volume)))</code></pre></div></div><div style="margin:15px;"><div><p>Basic consistency check:</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [radius 0.03
+      straight-length 0.18
+      total-volume (amp-volume radius straight-length)
+      volume (fn [liquid-height]
+               (filled-volume radius straight-length liquid-height))
       eps 1.0e-12]
   (assert (&lt; (Math/abs (volume 0.0)) eps))
-  (assert (&lt; (Math/abs (- (volume r) (/ total 2.0))) eps))
-  (assert (&lt; (Math/abs (- (volume (* 2.0 r)) total)) eps))
+  (assert (&lt; (Math/abs (- (volume radius) (/ total-volume 2.0))) eps))
+  (assert (&lt; (Math/abs (- (volume (* 2.0 radius)) total-volume)) eps))
+  :ok)</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure printed-clojure">:ok
+</code></pre></div></div><div style="margin:15px;"><div><h2 id="3.-liquid-surface-area">3. Liquid Surface Area</h2><p>The free surface of the liquid consists of two parts:</p><ul><li>a rectangular area within the cylindrical section;</li><li>two semicircular areas within the hemispherical end caps.</li></ul><p>The total liquid surface area [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("S(h) = 2L\\sqrt{2rh-h^2} + \\pi(2rh-h^2)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-surface-area
+  [radius straight-length liquid-height]
+  (let [a (* liquid-height (- (* 2.0 radius) liquid-height))
+        cylinder-area (* 2.0 straight-length (Math/sqrt a))
+        end-caps-area (* Math/PI a)]
+    (+ cylinder-area end-caps-area)))</code></pre></div></div><div style="margin:15px;"><div><p>Basic consistency check:</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [radius 0.03
+      straight-length 0.18
+      liquid-area (fn [liquid-height]
+                    (liquid-surface-area radius
+                                         straight-length
+                                         liquid-height))
+      max-area (+ (* 2.0 radius straight-length)
+                  (* Math/PI radius radius))
+      eps 1.0e-12]
+  (assert (&lt; (Math/abs (liquid-area 0.0)) eps))
+  (assert (&lt; (Math/abs (- (liquid-area radius) max-area)) eps))
+  (assert (&lt; (Math/abs (liquid-area (* 2.0 radius))) eps))
   :ok)</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure printed-clojure">:ok
 </code></pre></div></div><div style="margin:15px;"><div style="background-color:grey;height:2px;width:100%;"></div></div><div style="margin:15px;"><div></div></div></div></div></div></div></div><script type="text/javascript">/*!
   Highlight.js v11.9.0 (git: b7ec4bfafc)
