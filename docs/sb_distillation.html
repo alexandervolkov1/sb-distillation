@@ -63,35 +63,32 @@
         end-caps-volume
         (* Math/PI liquid-height liquid-height
            (- radius (/ liquid-height 3.0)))]
-    (+ cylinder-volume end-caps-volume)))</code></pre></div></div><div style="margin:15px;"><div><p>Basic consistency check:</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [radius 0.03
-      straight-length 0.18
-      total-volume (amp-volume radius straight-length)
-      volume (fn [liquid-height]
-               (filled-volume radius straight-length liquid-height))
-      eps 1.0e-12]
-  (assert (&lt; (Math/abs (volume 0.0)) eps))
-  (assert (&lt; (Math/abs (- (volume radius) (/ total-volume 2.0))) eps))
-  (assert (&lt; (Math/abs (- (volume (* 2.0 radius)) total-volume)) eps))
-  :ok)</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure printed-clojure">:ok
-</code></pre></div></div><div style="margin:15px;"><div><h2 id="3.-liquid-surface-area">3. Liquid Surface Area</h2><p>The free surface of the liquid consists of two parts:</p><ul><li>a rectangular area within the cylindrical section;</li><li>two semicircular areas within the hemispherical end caps.</li></ul><p>The total liquid surface area [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("S(h) = 2L\\sqrt{2rh-h^2} + \\pi(2rh-h^2)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-surface-area
+    (+ cylinder-volume end-caps-volume)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="3.-liquid-surface-area">3. Liquid Surface Area</h2><p>The free surface of the liquid consists of two parts:</p><ul><li>a rectangular area within the cylindrical section;</li><li>two semicircular areas within the hemispherical end caps.</li></ul><p>The total liquid surface area [<span><script>katex.render("m^2", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("S(h) = 2L\\sqrt{2rh-h^2} + \\pi(2rh-h^2)", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>Valid for <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>.</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-surface-area
   [radius straight-length liquid-height]
-  (let [a (* liquid-height (- (* 2.0 radius) liquid-height))
-        cylinder-area (* 2.0 straight-length (Math/sqrt a))
-        end-caps-area (* Math/PI a)]
-    (+ cylinder-area end-caps-area)))</code></pre></div></div><div style="margin:15px;"><div><p>Basic consistency check:</p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(let [radius 0.03
-      straight-length 0.18
-      liquid-area (fn [liquid-height]
-                    (liquid-surface-area radius
-                                         straight-length
-                                         liquid-height))
-      max-area (+ (* 2.0 radius straight-length)
-                  (* Math/PI radius radius))
-      eps 1.0e-12]
-  (assert (&lt; (Math/abs (liquid-area 0.0)) eps))
-  (assert (&lt; (Math/abs (- (liquid-area radius) max-area)) eps))
-  (assert (&lt; (Math/abs (liquid-area (* 2.0 radius))) eps))
-  :ok)</code></pre></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure printed-clojure">:ok
-</code></pre></div></div><div style="margin:15px;"><div style="background-color:grey;height:2px;width:100%;"></div></div><div style="margin:15px;"><div></div></div></div></div></div></div></div><script type="text/javascript">/*!
+  (let [a-squared (* liquid-height (- (* 2.0 radius) liquid-height))
+        cylinder-area (* 2.0 straight-length (Math/sqrt a-squared))
+        end-caps-area (* Math/PI a-squared)]
+    (+ cylinder-area end-caps-area)))</code></pre></div></div><div style="margin:15px;"><div><h2 id="4.-liquid-height-from-mass">4. Liquid Height from Mass</h2><p>For a given liquid mass and density, the liquid volume [<span><script>katex.render("m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>] is:</p><span><script>katex.render("V = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>where:</p><ul><li><span><script>katex.render("m", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid mass [<span><script>katex.render("kg", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li><li><span><script>katex.render("\\rho", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span> is the liquid density [<span><script>katex.render("kg\/m^3", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span>]</li></ul><p>The liquid height is calculated by solving:</p><span><script>katex.render("V(h) = \\frac{m}{\\rho}", document.currentScript.parentElement, {displayMode: true, throwOnError: false});</script></span><p>The bisection method is used over the interval <span><script>katex.render("0 \\leqslant h \\leqslant 2r", document.currentScript.parentElement, {displayMode: false, throwOnError: false});</script></span></p></div></div><div style="margin:15px;"><div><pre><code class="sourceCode language-clojure source-clojure bg-light">(defn liquid-height-from-mass
+  [radius straight-length mass density]
+  (when-not (pos? density)
+    (throw (ex-info &quot;Density must be positive.&quot;
+                    {:density density})))
+  (let [target-volume (/ mass density)
+        total-volume (amp-volume radius straight-length)]
+    (when-not (&lt;= 0.0 target-volume total-volume)
+      (throw (ex-info &quot;Liquid volume is outside ampoule capacity.&quot;
+                      {:volume target-volume
+                       :capacity total-volume})))
+    (loop [low 0.0
+           high (* 2.0 radius)
+           steps 0]
+      (let [mid (/ (+ low high) 2.0)]
+        (if (= steps 60)
+          mid
+          (if (&lt; (filled-volume radius straight-length mid)
+                 target-volume)
+            (recur mid high (inc steps))
+            (recur low mid (inc steps))))))))</code></pre></div></div><div style="margin:15px;"><div style="background-color:grey;height:2px;width:100%;"></div></div><div style="margin:15px;"><div></div></div></div></div></div></div></div><script type="text/javascript">/*!
   Highlight.js v11.9.0 (git: b7ec4bfafc)
   (c) 2006-2023 undefined and other contributors
   License: BSD-3-Clause

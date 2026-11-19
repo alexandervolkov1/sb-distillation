@@ -6,4 +6,8 @@
 
  :aliases
  {:clay
-  {:main-opts ["-m" "scicloj.clay.v2.main"]}}}
+  {:main-opts ["-m" "scicloj.clay.v2.main"]}
+
+  :test
+  {:extra-paths ["test"]
+   :main-opts ["-m" "sb-distillation-test"]}}}

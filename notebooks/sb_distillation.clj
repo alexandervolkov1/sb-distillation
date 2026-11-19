@@ -57,19 +57,6 @@
            (- radius (/ liquid-height 3.0)))]
     (+ cylinder-volume end-caps-volume)))
 
-;; Basic consistency check:
-
-(let [radius 0.03
-      straight-length 0.18
-      total-volume (amp-volume radius straight-length)
-      volume (fn [liquid-height]
-               (filled-volume radius straight-length liquid-height))
-      eps 1.0e-12]
-  (assert (< (Math/abs (volume 0.0)) eps))
-  (assert (< (Math/abs (- (volume radius) (/ total-volume 2.0))) eps))
-  (assert (< (Math/abs (- (volume (* 2.0 radius)) total-volume)) eps))
-  :ok)
-
 ;; ## 3. Liquid Surface Area
 ;;
 ;; The free surface of the liquid consists of two parts:
@@ -80,27 +67,50 @@
 ;;
 ;; $$S(h) = 2L\sqrt{2rh-h^2} + \pi(2rh-h^2)$$
 ;;
-;; Valid for $0 \leqslant h \leqslant 2r$
+;; Valid for $0 \leqslant h \leqslant 2r$.
 
 (defn liquid-surface-area
   [radius straight-length liquid-height]
-  (let [a (* liquid-height (- (* 2.0 radius) liquid-height))
-        cylinder-area (* 2.0 straight-length (Math/sqrt a))
-        end-caps-area (* Math/PI a)]
+  (let [a-squared (* liquid-height (- (* 2.0 radius) liquid-height))
+        cylinder-area (* 2.0 straight-length (Math/sqrt a-squared))
+        end-caps-area (* Math/PI a-squared)]
     (+ cylinder-area end-caps-area)))
 
-;; Basic consistency check:
+;; ## 4. Liquid Height from Mass
+;;
+;; For a given liquid mass and density, the liquid volume [$m^3$] is:
+;;
+;; $$V = \frac{m}{\rho}$$
+;;
+;; where:
+;; - $m$ is the liquid mass [$kg$]
+;; - $\rho$ is the liquid density [$kg/m^3$]
+;;
+;; The liquid height is calculated by solving:
+;;
+;; $$V(h) = \frac{m}{\rho}$$
+;;
+;; The bisection method is used over the interval
+;; $0 \leqslant h \leqslant 2r$
 
-(let [radius 0.03
-      straight-length 0.18
-      liquid-area (fn [liquid-height]
-                    (liquid-surface-area radius
-                                         straight-length
-                                         liquid-height))
-      max-area (+ (* 2.0 radius straight-length)
-                  (* Math/PI radius radius))
-      eps 1.0e-12]
-  (assert (< (Math/abs (liquid-area 0.0)) eps))
-  (assert (< (Math/abs (- (liquid-area radius) max-area)) eps))
-  (assert (< (Math/abs (liquid-area (* 2.0 radius))) eps))
-  :ok)
+(defn liquid-height-from-mass
+  [radius straight-length mass density]
+  (when-not (pos? density)
+    (throw (ex-info "Density must be positive."
+                    {:density density})))
+  (let [target-volume (/ mass density)
+        total-volume (amp-volume radius straight-length)]
+    (when-not (<= 0.0 target-volume total-volume)
+      (throw (ex-info "Liquid volume is outside ampoule capacity."
+                      {:volume target-volume
+                       :capacity total-volume})))
+    (loop [low 0.0
+           high (* 2.0 radius)
+           steps 0]
+      (let [mid (/ (+ low high) 2.0)]
+        (if (= steps 60)
+          mid
+          (if (< (filled-volume radius straight-length mid)
+                 target-volume)
+            (recur mid high (inc steps))
+            (recur low mid (inc steps))))))))
