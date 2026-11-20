@@ -1,5 +1,6 @@
 (ns sb-distillation
-  (:require [scicloj.kindly.v4.kind :as kind]))
+  (:require [scicloj.kindly.v4.kind :as kind]
+            [sb-distillation.plot :as plot]))
 
 ;; # Vacuum Distillation of Antimony
 ;;
@@ -212,12 +213,6 @@
            (pa-to-torr (sb-liquid-vapor-pressure temp-c))
            :phase "Liquid"})))
 
-      ;; Auxiliary datasets for grid lines.
-      x-major-grid (mapv (fn [x] {:x x}) x-major-values)
-      x-minor-grid (mapv (fn [x] {:x x}) x-minor-values)
-      y-major-grid (mapv (fn [y] {:y y}) y-major-values)
-      y-minor-grid (mapv (fn [y] {:y y}) y-minor-values)
-
       ;; Special annotation: melting point.
       melting-data
       [{:temp-c melting-point
@@ -226,20 +221,11 @@
         :label "melting point"}]
 
       ;; Plot appearance.
-      plot-width 800
-      plot-height 600
-
-      major-grid-color "#bbbbbb"
-      minor-grid-color "#dddddd"
-
-      major-grid-width 1.2
-      minor-grid-width 0.6
       curve-width 3
 
       axis-label-font-size 15
       axis-title-font-size 17
       legend-font-size 15
-      title-font-size 18
       melting-label-font-size 14
 
       ;; Reusable axis definitions.
@@ -269,29 +255,6 @@
        :symbolSize 180}
 
       ;; Helper layers.
-      vertical-grid-layer
-      (fn [values color stroke-width]
-        {:data {:values values}
-         :mark {:type "rule"
-                :color color
-                :strokeWidth stroke-width}
-         :encoding
-         {:x {:field "x"
-              :type "quantitative"
-              :scale {:domain x-domain}}}})
-
-      horizontal-grid-layer
-      (fn [values color stroke-width]
-        {:data {:values values}
-         :mark {:type "rule"
-                :color color
-                :strokeWidth stroke-width}
-         :encoding
-         {:y {:field "y"
-              :type "quantitative"
-              :scale {:type "log"
-                      :domain y-domain}}}})
-
       data-lines-layer
       {:data {:values points}
        :mark {:type "line"
@@ -342,24 +305,24 @@
                :type "nominal"}}}]
 
   (kind/vega-lite
-   {:title {:text "Saturated vapor pressure of antimony"
-            :orient "bottom"
-            :anchor "middle"
-            :fontSize title-font-size
-            :offset 18}
+   (merge plot/theme
+          {:title "Saturated vapor pressure of antimony"
 
-    :width plot-width
-    :height plot-height
+           :layer
+           [(plot/grid-layer :x x-minor-values
+                             {:domain x-domain} false)
+            (plot/grid-layer :x x-major-values
+                             {:domain x-domain} true)
+            (plot/grid-layer :y y-minor-values
+                             {:type "log" :domain y-domain} false)
+            (plot/grid-layer :y y-major-values
+                             {:type "log" :domain y-domain} true)
 
-    :layer [(vertical-grid-layer x-minor-grid minor-grid-color minor-grid-width)
-            (vertical-grid-layer x-major-grid major-grid-color major-grid-width)
-            (horizontal-grid-layer y-minor-grid minor-grid-color minor-grid-width)
-            (horizontal-grid-layer y-major-grid major-grid-color major-grid-width)
             data-lines-layer
             melting-point-layer
-            melting-label-layer]}))
+            melting-label-layer]})))
 
-;; 6. Mean Free Path and Knunsen Number
+;; ## 6. Mean Free Path and Knunsen Number
 ;;
 ;; The vapor is assumed to consist entirely os $Sb_4$.
 ;; Molecules are approximated as hard spheres.
@@ -399,6 +362,171 @@
                     {:tube-diameter-m tube-diameter-m})))
   (/ mean-free-path-m tube-diameter-m))
 
+;; ### 6.1. Knudsen Number at the Source
+;;
+;; The local vapor pressure is approximated by the saturation
+;; pressure of liquid antimony.
+;; The collision diameter is assumed to be 0.6 $nm$.
+;; The pressure correlation is extrapolated below its
+;; experimental temperature range.
+
+(let [collision-diameter 0.6e-9
+      tube-diameters-mm [8 10 16 20]
+
+      x-domain [650 750]
+      y-domain [0.001 0.1]
+
+      x-major-values [650 700 750]
+      x-minor-values
+      (vec (remove #(zero? (mod % 50))
+                   (range 650 751 10)))
+
+      y-major-values [0.001 0.01 0.1]
+      y-minor-values
+      (vec
+       (for [exp (range -3 -1)
+             m (range 2 10)]
+         (* m (Math/pow 10.0 exp))))
+
+      ;; Calculate $Kn$ for each temperature and tube diameter.
+      points
+      (vec
+       (for [diameter-mm tube-diameters-mm
+             temp-c (range 650 751 2)
+             :let [pressure
+                   (sb-liquid-vapor-pressure temp-c)
+
+                   mean-free-path
+                   (sb4-mean-free-path
+                    temp-c pressure collision-diameter)]]
+         {:temp-c temp-c
+          :kn (knudsen-number mean-free-path
+                              (* diameter-mm 1.0e-3))
+          :diameter (str diameter-mm " mm")}))
+
+      ;; Main curves
+      curves-layer
+      {:data {:values points}
+       :mark {:type "line"
+              :strokeWidth 3}
+       :encoding
+       {:x {:field "temp-c"
+            :type "quantitative"
+            :scale {:domain x-domain}
+            :axis {:title "Temperature (°C)"
+                   :values x-major-values}}
+        :y {:field "kn"
+            :type "quantitative"
+            :scale {:type "log"
+                    :domain y-domain}
+            :axis {:title "Knudsen number"
+                   :values y-major-values}}
+
+        :color {:field "diameter"
+                :type "nominal"
+                :sort ["8 mm" "10 mm" "16 mm" "20 mm"]
+                :legend {:title nil}}}}]
+
+  (kind/vega-lite
+   (merge plot/theme
+          {:title "Knudsen number at the source"
+
+           :layer
+           [(plot/grid-layer :x x-minor-values
+                             {:domain x-domain} false)
+            (plot/grid-layer :x x-major-values
+                             {:domain x-domain} true)
+            (plot/grid-layer :y y-minor-values
+                             {:type "log" :domain y-domain} false)
+            (plot/grid-layer :y y-major-values
+                             {:type "log" :domain y-domain} true)
+            curves-layer]})))
+
+;; ### 6.2. Knudsen Number at the Receiver
+;;
+;; The local vapor pressure is approximated by
+;; the saturation pressure of solid antimony.
+;;
+;; The collision diameter is assumed to be 0.6 nm.
+;; The temperature range is 450-550 °C.
+
+(let [collision-diameter-m 0.6e-9
+      tube-diameters-mm [8 10 16 20]
+
+      x-domain [450 550]
+      y-domain [0.1 100.0]
+
+      ;; Major and minor tick positions.
+      x-major-values [450 500 550]
+      x-minor-values
+      (vec (remove #(zero? (mod % 50))
+                   (range 450 551 10)))
+
+      y-major-values [0.1 1.0 10.0 100.0]
+      y-minor-values
+      (vec
+       (for [exp (range -1 2)
+             m (range 2 10)]
+         (* m (Math/pow 10.0 exp))))
+
+      ;; Calculate Kn for each temperature and tube diameter.
+      points
+      (vec
+       (for [diameter-mm tube-diameters-mm
+             temp-c (range 450 551 2)
+             :let [pressure-pa
+                   (sb-solid-vapor-pressure temp-c)
+
+                   mean-free-path-m
+                   (sb4-mean-free-path
+                    temp-c pressure-pa collision-diameter-m)]]
+
+         {:temp-c temp-c
+          :kn (knudsen-number
+               mean-free-path-m
+               (* diameter-mm 1.0e-3))
+          :diameter (str diameter-mm " mm")}))
+
+      ;; Main curves.
+      curves-layer
+      {:data {:values points}
+       :mark {:type "line"
+              :strokeWidth 3}
+       :encoding
+       {:x {:field "temp-c"
+            :type "quantitative"
+            :scale {:domain x-domain}
+            :axis {:title "Temperature (°C)"
+                   :values x-major-values}}
+
+        :y {:field "kn"
+            :type "quantitative"
+            :scale {:type "log"
+                    :domain y-domain}
+            :axis {:title "Knudsen number"
+                   :values y-major-values}}
+
+        :color {:field "diameter"
+                :type "nominal"
+                :sort ["8 mm" "10 mm" "16 mm" "20 mm"]
+                :legend {:title nil}}}}]
+
+  (kind/vega-lite
+   (merge plot/theme
+          {:title "Knudsen number at the receiver"
+
+           :layer
+           [(plot/grid-layer :x x-minor-values
+                             {:domain x-domain} false)
+            (plot/grid-layer :x x-major-values
+                             {:domain x-domain} true)
+            (plot/grid-layer :y y-minor-values
+                             {:type "log" :domain y-domain} false)
+            (plot/grid-layer :y y-major-values
+                             {:type "log" :domain y-domain} true)
+
+            curves-layer]})))
+
 ^:kindly/hide-code
 (kind/hiccup
  [:script
@@ -410,7 +538,7 @@
       if (pre.closest('details')) return;
 
       const details = document.createElement('details');
-      details.open = true;
+      //details.open = true;
       const summary = document.createElement('summary');
 
       summary.textContent = 'Code';
