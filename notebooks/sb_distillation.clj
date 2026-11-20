@@ -273,7 +273,21 @@
 
         :color {:field "phase"
                 :type "nominal"
-                :legend phase-legend}}}
+                :legend phase-legend}
+        :tooltip
+        [{:field "temp-c"
+          :type "quantitative"
+          :title "Temperature (°C)"
+          :format ".1f"}
+
+         {:field "pressure-torr"
+          :type "quantitative"
+          :title "Vapor pressure (Torr)"
+          :format ".4g"}
+
+         {:field "phase"
+          :type "nominal"
+          :title "Phase"}]}}
 
       melting-point-layer
       {:data {:values melting-data}
@@ -334,7 +348,7 @@
 ;;
 ;; $$\mathrm{Kn} = \frac{\lambda}{D}$$
 ;;
-;; $D$ is the internal tube diameter in m.
+;; $D$ is the internal tube diameter in $m$.
 
 (def boltzmann-const 1.380649e-23)
 
@@ -362,129 +376,229 @@
                     {:tube-diameter-m tube-diameter-m})))
   (/ mean-free-path-m tube-diameter-m))
 
-;; ### 6.1. Knudsen Number at the Source
+;; ## 7. Sb4 Mass Flow Through the Tube
 ;;
-;; The local vapor pressure is approximated by the saturation
-;; pressure of liquid antimony.
-;; The collision diameter is assumed to be 0.6 $nm$.
-;; The pressure correlation is extrapolated below its
-;; experimental temperature range.
-
-(let [collision-diameter 0.6e-9
-      tube-diameters-mm [8 10 16 20]
-
-      x-domain [650 750]
-      y-domain [0.001 0.1]
-
-      x-major-values [650 700 750]
-      x-minor-values
-      (vec (remove #(zero? (mod % 50))
-                   (range 650 751 10)))
-
-      y-major-values [0.001 0.01 0.1]
-      y-minor-values
-      (vec
-       (for [exp (range -3 -1)
-             m (range 2 10)]
-         (* m (Math/pow 10.0 exp))))
-
-      ;; Calculate $Kn$ for each temperature and tube diameter.
-      points
-      (vec
-       (for [diameter-mm tube-diameters-mm
-             temp-c (range 650 751 2)
-             :let [pressure
-                   (sb-liquid-vapor-pressure temp-c)
-
-                   mean-free-path
-                   (sb4-mean-free-path
-                    temp-c pressure collision-diameter)]]
-         {:temp-c temp-c
-          :kn (knudsen-number mean-free-path
-                              (* diameter-mm 1.0e-3))
-          :diameter (str diameter-mm " mm")}))
-
-      ;; Main curves
-      curves-layer
-      {:data {:values points}
-       :mark {:type "line"
-              :strokeWidth 3}
-       :encoding
-       {:x {:field "temp-c"
-            :type "quantitative"
-            :scale {:domain x-domain}
-            :axis {:title "Temperature (°C)"
-                   :values x-major-values}}
-        :y {:field "kn"
-            :type "quantitative"
-            :scale {:type "log"
-                    :domain y-domain}
-            :axis {:title "Knudsen number"
-                   :values y-major-values}}
-
-        :color {:field "diameter"
-                :type "nominal"
-                :sort ["8 mm" "10 mm" "16 mm" "20 mm"]
-                :legend {:title nil}}}}]
-
-  (kind/vega-lite
-   (merge plot/theme
-          {:title "Knudsen number at the source"
-
-           :layer
-           [(plot/grid-layer :x x-minor-values
-                             {:domain x-domain} false)
-            (plot/grid-layer :x x-major-values
-                             {:domain x-domain} true)
-            (plot/grid-layer :y y-minor-values
-                             {:type "log" :domain y-domain} false)
-            (plot/grid-layer :y y-major-values
-                             {:type "log" :domain y-domain} true)
-            curves-layer]})))
-
-;; ### 6.2. Knudsen Number at the Receiver
+;; The vapor is assumed to consist entirely of Sb4.
+;; The connecting tube is straight, cylindrical, and isothermal.
+;; Its wall temperature equals the source temperature.
+;; No condensation occurs inside the tube.
 ;;
-;; The local vapor pressure is approximated by
-;; the saturation pressure of solid antimony.
+;; The inlet pressure is approximated by the saturated vapor
+;; pressure of liquid antimony at the source temperature.
+;; The outlet is treated as an ideal vapor sink ($p_2 = 0$).
+;;
+;; ### 7.1. Tube Conductance
+;;
+;; The transitional-flow conductance is approximated
+;; using the Knudsen formula:
+;;
+;; $$C = C_{\mathrm{vis}} + Z C_{\mathrm{mol}}$$
+;;
+;; where:
+;; - $C$ is the total conductance [$m^3/s$]
+;; - $C_{\mathrm{vis}}$ is the viscous conductance [$m^3/s$]
+;; - $C_{\mathrm{mol}}$ is the molecular conductance [$m^3/s$]
+;; - $Z$ is the dimensionless Knudsen correction factor
+;;
+;; The viscous conductance is:
+;;
+;; $$C_{\mathrm{vis}} =
+;; \frac{\pi D^4 \bar{p}}{128\eta L}$$
+;;
+;; The molecular conductance is:
+;;
+;; $$C_{\mathrm{mol}} =
+;; \frac{\pi D^3}{12L}\sqrt{\frac{8RT}{\pi M}}$$
+;;
+;; where:
+;; - $D$ is the internal tube diameter [$m$]
+;; - $L$ is the tube length [$m$]
+;; - $\bar{p}=(p_1+p_2)/2$ is the mean pressure [$Pa$]
+;; - $\eta$ is the dynamic viscosity [$Pa \cdot s$]
+;; - $T$ is the absolute temperature [$K$]
+;; - $R$ is the universal gas constant [$J/(mol \cdot K)$]
+;; - $M$ is the molar mass of Sb4 [$kg/mol$]
+;;
+;; The Knudsen correction factor is:
+;;
+;; $$Z = \frac{1+2.507r/\bar{\lambda}}
+;; {1+3.095r/\bar{\lambda}}$$
+;;
+;; where:
+;; - $r=D/2$ is the tube radius [$m$]
+;; - $\bar{\lambda}$ is the mean free path at $\bar{p}$ [$m$]
+;;
+;; ### 7.2. Gas Viscosity
+;;
+;; The dynamic viscosity is estimated using
+;; the hard-sphere gas model:
+;;
+;; $$\eta = \frac{5}{16d^2}
+;; \sqrt{\frac{mk_BT}{\pi}}$$
+;;
+;; where:
+;; - $d$ is the molecular collision diameter [$m$]
+;; - $m=M/N_A$ is the mass of one Sb4 molecule [$kg$]
+;; - $k_B$ is the Boltzmann constant [$J/K$]
+;; - $N_A$ is the Avogadro constant [$mol^{-1}$]
 ;;
 ;; The collision diameter is assumed to be 0.6 nm.
-;; The temperature range is 450-550 °C.
 
-(let [collision-diameter-m 0.6e-9
+(def gas-constant 8.314462618)
+(def avogadro-constant 6.02214076e23)
+(def sb4-molar-mass 0.48704)
+
+(defn sb4-hard-sphere-viscosity
+  [temp-c collision-diameter-m]
+  (let [temp-k (+ temp-c 273.15)
+        molecule-mass (/ sb4-molar-mass avogadro-constant)]
+    (when-not (and (pos? temp-k)
+                   (pos? collision-diameter-m))
+      (throw (ex-info "Invalid gas parameters."
+                      {:temp-c temp-c
+                       :collision-diameter-m collision-diameter-m})))
+    (/ (* 5.0
+          (Math/sqrt
+           (/ (* molecule-mass boltzmann-const temp-k)
+              Math/PI)))
+       (* 16.0 collision-diameter-m collision-diameter-m))))
+
+;; ### 7.3. Mass Flow Rate
+;;
+;; The mass flow rate is:
+;;
+;; $$\dot{m} = \frac{M}{RT} C (p_1-p_2)$$
+;;
+;; where:
+;; - $\dot{m}$ is the mass flow rate [$kg/s$]
+;; - $p_1$ is the inlet pressure [$Pa$]
+;; - $p_2$ is the outlet pressure [$Pa$]
+;;
+;; The function returns the mass flow rate in kg/s.
+
+(defn sb4-tube-mass-flow
+  [temp-c tube-diameter-m tube-length-m collision-diameter-m]
+  (when-not (and (pos? tube-diameter-m)
+                 (pos? tube-length-m))
+    (throw (ex-info "Invalid tube geometry."
+                    {:tube-diameter-m tube-diameter-m
+                     :tube-length-m tube-length-m})))
+
+  (let [temp-k (+ temp-c 273.15)
+
+        ;; Boundary pressures.
+        p1 (sb-liquid-vapor-pressure temp-c)
+        p2 0.0
+        p-mean (/ (+ p1 p2) 2.0)
+
+        ;; Gas properties.
+        viscosity
+        (sb4-hard-sphere-viscosity
+         temp-c collision-diameter-m)
+
+        mean-free-path
+        (sb4-mean-free-path
+         temp-c p-mean collision-diameter-m)
+
+        ;; Tube geometry.
+        radius (/ tube-diameter-m 2.0)
+
+        ;; Molecular conductance.
+        c-molecular
+        (* (/ (* Math/PI
+                 (Math/pow tube-diameter-m 3.0))
+              (* 12.0 tube-length-m))
+           (Math/sqrt
+            (/ (* 8.0 gas-constant temp-k)
+               (* Math/PI sb4-molar-mass))))
+
+        ;; Viscous conductance.
+        c-viscous
+        (/ (* Math/PI
+              (Math/pow tube-diameter-m 4.0)
+              p-mean)
+           (* 128.0 viscosity tube-length-m))
+
+        ;; Knudsen correction factor.
+        ratio (/ radius mean-free-path)
+
+        z (/ (+ 1.0 (* 2.507 ratio))
+             (+ 1.0 (* 3.095 ratio)))
+
+        ;; Total conductance.
+        conductance
+        (+ c-viscous (* z c-molecular))]
+
+    (* (/ sb4-molar-mass (* gas-constant temp-k))
+       conductance
+       (- p1 p2))))
+
+(defn sb4-distillation-days
+  [mass-kg temp-c tube-diameter-m tube-length-m collision-diameter-m]
+  (when-not (pos? mass-kg)
+    (throw (ex-info "Mass must be positive."
+                    {:mass-kg mass-kg})))
+  (/ mass-kg
+     (* 86400.0
+        (sb4-tube-mass-flow
+         temp-c
+         tube-diameter-m
+         tube-length-m
+         collision-diameter-m))))
+
+;; ### 7.4. Mass Flow versus Source Temperature
+;;
+;; Tube length: 0.5 m.
+;; Tube diameters: 8, 10, 16, and 20 mm.
+;; Collision diameter: 0.6 nm.
+;;
+;; The calculated mass flow is converted to g/h.
+;;
+;; These are preliminary estimates based on a mean-pressure
+;; Knudsen conductance approximation and ideal boundary conditions.
+;; The liquid vapor pressure correlation is extrapolated
+;; below its experimental range of 785-1100 °C.
+
+(let [;; Model parameters.
+      tube-length-m 0.5
+      collision-diameter-m 0.6e-9
       tube-diameters-mm [8 10 16 20]
 
-      x-domain [450 550]
-      y-domain [0.1 100.0]
+      ;; Plot ranges.
+      x-domain [650 750]
+      y-domain [0.1 1000.0]
 
       ;; Major and minor tick positions.
-      x-major-values [450 500 550]
-      x-minor-values
-      (vec (remove #(zero? (mod % 50))
-                   (range 450 551 10)))
+      x-major-values [650 700 750]
 
-      y-major-values [0.1 1.0 10.0 100.0]
+      x-minor-values
+      (vec
+       (remove #(zero? (mod % 50))
+               (range 650 751 10)))
+
+      y-major-values
+      [0.1 1.0 10.0 100.0 1000.0]
+
       y-minor-values
       (vec
-       (for [exp (range -1 2)
+       (for [exp (range -1 3)
              m (range 2 10)]
          (* m (Math/pow 10.0 exp))))
 
-      ;; Calculate Kn for each temperature and tube diameter.
+      ;; Mass flow values in g/h.
       points
       (vec
        (for [diameter-mm tube-diameters-mm
-             temp-c (range 450 551 2)
-             :let [pressure-pa
-                   (sb-solid-vapor-pressure temp-c)
-
-                   mean-free-path-m
-                   (sb4-mean-free-path
-                    temp-c pressure-pa collision-diameter-m)]]
+             temp-c (range 650 751 2)]
 
          {:temp-c temp-c
-          :kn (knudsen-number
-               mean-free-path-m
-               (* diameter-mm 1.0e-3))
+          :mass-flow-g-h
+          (* 3.6e6
+             (sb4-tube-mass-flow
+              temp-c
+              (* diameter-mm 1.0e-3)
+              tube-length-m
+              collision-diameter-m))
           :diameter (str diameter-mm " mm")}))
 
       ;; Main curves.
@@ -496,24 +610,39 @@
        {:x {:field "temp-c"
             :type "quantitative"
             :scale {:domain x-domain}
-            :axis {:title "Temperature (°C)"
+            :axis {:title "Source temperature (°C)"
                    :values x-major-values}}
 
-        :y {:field "kn"
+        :y {:field "mass-flow-g-h"
             :type "quantitative"
             :scale {:type "log"
                     :domain y-domain}
-            :axis {:title "Knudsen number"
+            :axis {:title "Mass flow (g/h)"
                    :values y-major-values}}
 
         :color {:field "diameter"
                 :type "nominal"
                 :sort ["8 mm" "10 mm" "16 mm" "20 mm"]
-                :legend {:title nil}}}}]
+                :legend {:title nil}}
+
+        :tooltip
+        [{:field "temp-c"
+          :type "quantitative"
+          :title "Temperature (°C)"
+          :format ".0f"}
+
+         {:field "diameter"
+          :type "nominal"
+          :title "Tube diameter"}
+
+         {:field "mass-flow-g-h"
+          :type "quantitative"
+          :title "Mass flow (g/h)"
+          :format ".3f"}]}}]
 
   (kind/vega-lite
    (merge plot/theme
-          {:title "Knudsen number at the receiver"
+          {:title "Sb4 mass flow through the tube"
 
            :layer
            [(plot/grid-layer :x x-minor-values
@@ -521,11 +650,402 @@
             (plot/grid-layer :x x-major-values
                              {:domain x-domain} true)
             (plot/grid-layer :y y-minor-values
-                             {:type "log" :domain y-domain} false)
+                             {:type "log"
+                              :domain y-domain} false)
             (plot/grid-layer :y y-major-values
-                             {:type "log" :domain y-domain} true)
+                             {:type "log"
+                              :domain y-domain} true)
 
             curves-layer]})))
+
+;; ### 7.5. Mass Flow versus Tube Diameter
+;;
+;; Source temperatures: 650-750 °C, in steps of 20 °C.
+;; Tube diameter: 8-20 mm.
+;; Tube length: 0.5 m.
+;; Collision diameter: 0.6 nm.
+;;
+;; The calculated mass flow is converted to g/h.
+
+(let [;; Model parameters.
+      tube-length-m 0.5
+      collision-diameter-m 0.6e-9
+      temperatures-c (vec (range 650 751 20))
+
+      ;; Plot ranges.
+      x-domain [8 20]
+      y-domain [0.1 1000.0]
+
+      ;; Major and minor tick positions.
+      x-major-values (vec (range 8 21 2))
+      x-minor-values (vec (range 9 20 2))
+
+      y-major-values
+      [0.1 1.0 10.0 100.0 1000.0]
+
+      y-minor-values
+      (vec
+       (for [exp (range -1 3)
+             m (range 2 10)]
+         (* m (Math/pow 10.0 exp))))
+
+      ;; Mass flow values in g/h.
+      points
+      (vec
+       (for [temp-c temperatures-c
+             diameter-step (range 80 201)
+             :let [diameter-mm (/ diameter-step 10.0)]]
+
+         {:diameter-mm diameter-mm
+          :mass-flow-g-h
+          (* 3.6e6
+             (sb4-tube-mass-flow
+              temp-c
+              (* diameter-mm 1.0e-3)
+              tube-length-m
+              collision-diameter-m))
+          :temperature (str temp-c " °C")}))
+
+      ;; Main curves.
+      curves-layer
+      {:data {:values points}
+       :mark {:type "line"
+              :strokeWidth 3}
+       :encoding
+       {:x {:field "diameter-mm"
+            :type "quantitative"
+            :scale {:domain x-domain}
+            :axis {:title "Tube diameter (mm)"
+                   :values x-major-values}}
+
+        :y {:field "mass-flow-g-h"
+            :type "quantitative"
+            :scale {:type "log"
+                    :domain y-domain}
+            :axis {:title "Mass flow (g/h)"
+                   :values y-major-values}}
+
+        :color {:field "temperature"
+                :type "nominal"
+                :sort (mapv #(str % " °C") temperatures-c)
+                :legend {:title nil}}
+
+        :tooltip
+        [{:field "diameter-mm"
+          :type "quantitative"
+          :title "Tube diameter (mm)"
+          :format ".1f"}
+
+         {:field "temperature"
+          :type "nominal"
+          :title "Source temperature"}
+
+         {:field "mass-flow-g-h"
+          :type "quantitative"
+          :title "Mass flow (g/h)"
+          :format ".3f"}]}}]
+
+  (kind/vega-lite
+   (merge plot/theme
+          {:title "Sb4 mass flow versus tube diameter"
+
+           :layer
+           [(plot/grid-layer :x x-minor-values
+                             {:domain x-domain} false)
+            (plot/grid-layer :x x-major-values
+                             {:domain x-domain} true)
+            (plot/grid-layer :y y-minor-values
+                             {:type "log"
+                              :domain y-domain} false)
+            (plot/grid-layer :y y-major-values
+                             {:type "log"
+                              :domain y-domain} true)
+
+            curves-layer]})))
+
+;; ### 7.6. Distillation Time Contours
+;;
+;; Estimated time to distill 0.5 kg of antimony.
+;; The tube limits the flow; its wall is at source temperature.
+;; No carrier gas, no tube condensation, ideal vapor sink.
+;; The flow is assumed constant during distillation.
+
+(let [;; Physical parameters.
+      mass-kg 0.5
+      tube-length-m 0.5
+      collision-diameter-m 0.6e-9
+
+      ;; Plot ranges.
+      x-domain [8.0 20.0]
+      y-domain [650.0 750.0]
+
+      ;; Major contours are labeled; minor contours are not.
+      major-levels
+      [0.25 0.5 0.75 1.0 2.0 3.0 5.0 7.0 10.0 14.0 20.0]
+
+      minor-levels
+      [4.0 6.0 8.0 9.0 12.0 16.0 18.0]
+
+      ;; Only major grid lines are shown.
+      x-major-values (vec (range 8 21 2))
+      y-major-values (vec (range 650 751 20))
+
+      ;; Duration in days.
+      duration
+      (fn [temp-c diameter-mm]
+        (sb4-distillation-days
+         mass-kg temp-c (* diameter-mm 1.0e-3)
+         tube-length-m collision-diameter-m))
+
+      ;; Fine rectangular mesh for the background color field.
+      ;; Cell size: 0.2 mm by 1 °C.
+      heatmap-data
+      (vec
+       (for [di (range 40 100)
+             ti (range 650 750)
+             :let [d0 (/ di 5.0)
+                   d1 (/ (inc di) 5.0)
+                   t0 (double ti)
+                   t1 (inc t0)]]
+         {:d0 d0
+          :d1 (min (second x-domain) (+ d1 0.012))
+          :t0 t0
+          :t1 (min (second y-domain) (+ t1 0.12))
+          :days (duration (/ (+ t0 t1) 2.0)
+                          (/ (+ d0 d1) 2.0))}))
+
+      ;; Logarithmic color scale for the filled field.
+      fill-color-scale
+      {:type "log"
+       :domain [(duration 750.0 20.0)
+                (duration 650.0 8.0)]
+       :range ["#1a9850"
+               "#91cf60"
+               "#ffffbf"
+               "#fc8d59"
+               "#d73027"]}
+
+      ;; Darker version of the same scale for contour lines and labels.
+      line-color-scale
+      {:type "log"
+       :domain [(duration 750.0 20.0)
+                (duration 650.0 8.0)]
+       :range ["#0b5d2a"
+               "#4f7f2a"
+               "#b39b00"
+               "#a64b1f"
+               "#7f1d1d"]}
+
+      ;; Format duration labels.
+      format-days
+      (fn [days]
+        (if (< days 1.0)
+          (str (int (* 24.0 days)) " h")
+          (str (int days) " d")))
+
+      ;; Solve t(T, D) = target-days for D by bisection.
+      diameter-at-days
+      (fn [temp-c target-days]
+        (let [d-min (first x-domain)
+              d-max (second x-domain)]
+          (when (<= (duration temp-c d-max)
+                    target-days
+                    (duration temp-c d-min))
+            (loop [low d-min
+                   high d-max
+                   steps 0]
+              (let [mid (/ (+ low high) 2.0)]
+                (if (= steps 45)
+                  mid
+                  (if (> (duration temp-c mid) target-days)
+                    (recur mid high (inc steps))
+                    (recur low mid (inc steps)))))))))
+
+      temperatures-c
+      (mapv #(/ % 2.0) (range 1300 1501))
+
+      ;; Generate points for each contour.
+      contour-points
+      (fn [levels]
+        (vec
+         (for [days levels
+               temp-c temperatures-c
+               :let [diameter-mm
+                     (diameter-at-days temp-c days)]
+               :when diameter-mm]
+           {:diameter-mm diameter-mm
+            :temp-c temp-c
+            :days days
+            :label (format-days days)})))
+
+      major-points (contour-points major-levels)
+      minor-points (contour-points minor-levels)
+
+;; Place horizontal labels along the plot diagonal.
+      labels
+      (vec
+       (keep
+        (fn [days]
+          (let [curve
+                (filterv #(= days (:days %)) major-points)]
+            (when (seq curve)
+              (let [best
+                    (apply min-key
+                           (fn [{:keys [diameter-mm temp-c]}]
+                             (let [x (/ (- diameter-mm (first x-domain))
+                                        (- (second x-domain) (first x-domain)))
+                                   y (/ (- temp-c (first y-domain))
+                                        (- (second y-domain) (first y-domain)))]
+                               (Math/abs (- x y))))
+                           curve)
+
+                    half-width-mm
+                    (+ 0.14 (* 0.06 (count (:label best))))
+
+                    half-height-c 2.0]
+
+                (assoc best
+                       :d0 (- (:diameter-mm best) half-width-mm)
+                       :d1 (+ (:diameter-mm best) half-width-mm)
+                       :t0 (- (:temp-c best) half-height-c)
+                       :t1 (+ (:temp-c best) half-height-c))))))
+        major-levels))
+
+;; Continuous background color field.
+      fill-layer
+      {:data {:values heatmap-data}
+       :mark {:type "rect"
+              :stroke nil
+              :strokeWidth 0}
+       :encoding
+       {:x {:field "d0"
+            :type "quantitative"
+            :scale {:domain x-domain}
+            :axis {:title "Tube diameter (mm)"
+                   :values x-major-values}}
+        :x2 {:field "d1"}
+
+        :y {:field "t0"
+            :type "quantitative"
+            :scale {:domain y-domain}
+            :axis {:title "Source temperature (°C)"
+                   :values y-major-values}}
+        :y2 {:field "t1"}
+
+        :color {:field "days"
+                :type "quantitative"
+                :scale fill-color-scale
+                :legend {:title "Days"
+                         :orient "top-right"
+                         :direction "vertical"
+                         :offset 12
+                         :gradientLength 200
+                         :gradientThickness 14
+                         :values [0.1 1.0 10.0]
+                         :labelFontSize 13
+                         :titleFontSize 14
+                         :fillColor "white"
+                         :strokeColor "#cccccc"
+                         :cornerRadius 4
+                         :padding 8
+                         :zindex 1}}
+
+        :tooltip
+        [{:field "days"
+          :type "quantitative"
+          :title "Duration (days)"
+          :format ".2f"}]}}
+
+      ;; Reusable contour layer.
+      contour-layer
+      (fn [points stroke-width opacity]
+        {:data {:values points}
+         :mark {:type "line"
+                :strokeWidth stroke-width
+                :opacity opacity}
+         :encoding
+         {:x {:field "diameter-mm"
+              :type "quantitative"
+              :scale {:domain x-domain}}
+
+          :y {:field "temp-c"
+              :type "quantitative"
+              :scale {:domain y-domain}}
+
+          :detail {:field "days"
+                   :type "nominal"}
+
+          :order {:field "temp-c"
+                  :type "quantitative"
+                  :sort "ascending"}
+
+          :color {:field "days"
+                  :type "quantitative"
+                  :scale line-color-scale
+                  :legend nil}
+
+          :tooltip
+          [{:field "days"
+            :type "quantitative"
+            :title "Duration (days)"}
+           {:field "diameter-mm"
+            :type "quantitative"
+            :title "Tube diameter (mm)"
+            :format ".2f"}
+           {:field "temp-c"
+            :type "quantitative"
+            :title "Source temperature (°C)"
+            :format ".1f"}]}})
+
+      ;; Horizontal contour labels.
+      label-text-layer
+      {:data {:values labels}
+       :mark {:type "text"
+              :color "black"
+              :fontSize 16
+              :fontWeight 900
+              :align "center"
+              :baseline "middle"
+              :stroke "white"
+              :strokeWidth 0.4}
+       :encoding
+       {:x {:field "diameter-mm"
+            :type "quantitative"
+            :scale {:domain x-domain}}
+
+        :y {:field "temp-c"
+            :type "quantitative"
+            :scale {:domain y-domain}}
+
+        :text {:field "label"
+               :type "nominal"}}}]
+
+  (kind/vega-lite
+   (merge plot/theme
+          {:width 1040
+           :height 710
+
+           :autosize {:type "fit"
+                      :contains "padding"}
+
+           :title "Estimated distillation time for 0.5 kg Sb"
+
+           ;; Independent color scales for the filled field and contour lines.
+           :resolve {:scale {:color "independent"}}
+
+           :layer
+           [fill-layer
+
+            ;; Major grid lines only.
+            (plot/grid-layer :x x-major-values
+                             {:domain x-domain} true)
+            (plot/grid-layer :y y-major-values
+                             {:domain y-domain} true)
+
+            (contour-layer minor-points 1.2 0.55)
+            (contour-layer major-points 2.4 0.95)
+
+            label-text-layer]})))
 
 ^:kindly/hide-code
 (kind/hiccup
