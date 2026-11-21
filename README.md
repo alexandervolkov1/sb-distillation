@@ -22,8 +22,9 @@
 ```powershell
 clojure -M:test
 clojure -M:clay -r notebooks/typography.clj
+clojure -M:clay -r notebooks/sb_distillation/report.clj
 ```
 
-Откройте `target/clay/typography.html`. Clay передаёт Quarto параметры из `clay.edn` и копирует каталог `styles/` рядом с HTML. Файл `styles/monograph.css` задаёт книжный набор, экранные поля и печать A4. Quarto преобразует формулы TeX в MathML.
+Образец типографики доступен в `target/clay/typography.html`, отчёт — в `target/clay/report.html`. Clay передаёт Quarto параметры из `clay.edn` и копирует каталог `styles/` рядом с HTML. Файл `styles/monograph.css` задаёт книжный набор, экранные поля и печать A4. Quarto преобразует формулы TeX в MathML.
 
-STIX Two Text и STIX Two Math подключаются локальными WOFF2 из выпуска 2.13 b171. Лицензия SIL OFL 1.1 приложена в `styles/fonts/OFL.txt`. Для сравнения в образце используется системная Georgia. Ссылка на коммерческую «Обыкновенную новую» приведена в каталоге правообладателя. [Выпуск STIX Two](https://github.com/stipub/stixfonts/releases/tag/v2.13b171), [New Standard в каталоге Paratype](https://www.paratype.ru/catalog/font/pt/new-standard).
+Текст набран шрифтом Old Standard в четырёх начертаниях, формулы — шрифтом Old Standard Math. Все пять файлов OpenType подключаются локально из `styles/fonts/`. Текстовые начертания распространяются по [SIL Open Font License 1.1](styles/fonts/OldStandard-OFL.txt), математическое — по [GUST Font License](styles/fonts/OldStandard-Math-GFL.txt). [Пакет OldStandard на CTAN](https://ctan.org/pkg/oldstandard).

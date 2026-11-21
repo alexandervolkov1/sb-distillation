@@ -34,104 +34,6 @@
   font-style: normal;
 }
 
-@font-face {
-  font-family: "XITS";
-  src: url("fonts/XITS-Regular.otf") format("opentype");
-  font-weight: 400;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "XITS";
-  src: url("fonts/XITS-Italic.otf") format("opentype");
-  font-weight: 400;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "XITS";
-  src: url("fonts/XITS-Bold.otf") format("opentype");
-  font-weight: 700;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "XITS";
-  src: url("fonts/XITS-BoldItalic.otf") format("opentype");
-  font-weight: 700;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "XITS Math";
-  src: url("fonts/XITSMath-Regular.otf") format("opentype");
-}
-
-@font-face {
-  font-family: "Literaturnaya";
-  src: url("fonts/literaturnayaplain.ttf") format("truetype");
-  font-weight: 400;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Literaturnaya";
-  src: url("fonts/literaturnayaitalic.ttf") format("truetype");
-  font-weight: 400;
-  font-style: italic;
-}
-
-@font-face {
-  font-family: "Literaturnaya";
-  src: url("fonts/literaturnayabold.ttf") format("truetype");
-  font-weight: 700;
-  font-style: normal;
-}
-
-@font-face {
-  font-family: "Literaturnaya";
-  src: url("fonts/literaturnayabolditalic.ttf") format("truetype");
-  font-weight: 700;
-  font-style: italic;
-}
-@font-face {
-  font-family: "STIX Two Text";
-  src: url("fonts/STIXTwoText-Regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "STIX Two Text";
-  src: url("fonts/STIXTwoText-Italic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "STIX Two Text";
-  src: url("fonts/STIXTwoText-Bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "STIX Two Text";
-  src: url("fonts/STIXTwoText-BoldItalic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "STIX Two Math";
-  src: url("fonts/STIXTwoMath-Regular.woff2") format("woff2");
-  font-display: swap;
-}
-
 html {
   color-scheme: light;
 }
@@ -186,24 +88,6 @@ math {
 math[display="block"] {
   margin-block: 1em;
   break-inside: avoid;
-}
-
-.font-comparison {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 2rem;
-  break-inside: avoid;
-}
-
-.font-specimen-georgia {
-  font-family: Georgia, "Times New Roman", serif;
-}
-
-@media screen and (max-width: 38rem) {
-  .font-comparison {
-    grid-template-columns: 1fr;
-    gap: 0;
-  }
 }
 
 @page {
