@@ -1,3 +1,99 @@
+
+@font-face {
+  font-family: "Old Standard";
+  src: url("fonts/OldStandard-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Old Standard";
+  src: url("fonts/OldStandard-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Old Standard";
+  src: url("fonts/OldStandard-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Old Standard";
+  src: url("fonts/OldStandard-BoldItalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Old Standard Math";
+  src: url("fonts/OldStandard-Math.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "XITS";
+  src: url("fonts/XITS-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "XITS";
+  src: url("fonts/XITS-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "XITS";
+  src: url("fonts/XITS-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "XITS";
+  src: url("fonts/XITS-BoldItalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "XITS Math";
+  src: url("fonts/XITSMath-Regular.otf") format("opentype");
+}
+
+@font-face {
+  font-family: "Literaturnaya";
+  src: url("fonts/literaturnayaplain.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Literaturnaya";
+  src: url("fonts/literaturnayaitalic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Literaturnaya";
+  src: url("fonts/literaturnayabold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Literaturnaya";
+  src: url("fonts/literaturnayabolditalic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+}
 @font-face {
   font-family: "STIX Two Text";
   src: url("fonts/STIXTwoText-Regular.woff2") format("woff2");
@@ -46,8 +142,8 @@ body {
   padding: 3rem 1.5rem;
   background: white;
   color: black;
-  font-family: "STIX Two Text", Georgia, serif;
-  font-size: 1.1875rem;
+  font-family: "Old Standard", serif;
+  font-size: 1rem;
   line-height: 1.5;
 }
 
@@ -84,7 +180,7 @@ a {
 }
 
 math {
-  font-family: "STIX Two Math", math;
+  font-family: "Old Standard Math", math;
 }
 
 math[display="block"] {
