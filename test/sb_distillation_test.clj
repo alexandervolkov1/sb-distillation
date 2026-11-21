@@ -1,7 +1,7 @@
 
 (ns sb-distillation-test
   (:require [clojure.test :refer [deftest is run-tests]]
-            [sb-distillation :as model]))
+            [sb-distillation.reference.legacy :as model]))
 
 (def radius 0.03)
 (def straight-length 0.18)
@@ -87,6 +87,23 @@
     (is (< (Math/abs (- (solid-pressure 500.0)
                         0.001773684))
            1.0e-7))))
+
+(deftest legacy-transport-test
+  (let [temperature 700.0
+        diameter 0.012
+        receiver (model/receiver-h2-torr 0.16)
+        params {:tube-diameter diameter :tube-length 0.5 :tube-temp temperature
+                :source-temp temperature :receiver-temp 500.0}]
+    (doseq [[description expected actual]
+            [["start.clj, g/h"
+              11.014484842937978 (model/empirical-sb-transfer-rate params)]
+             ["Knudsen correction, kg/s"
+              3.0617473671675637e-6 (model/sb4-tube-mass-flow temperature diameter 0.5 0.6e-9)]
+             ["Single-component DGM, kg/s"
+              3.1965762735981097e-6 (model/pure-dgm-mass-flow temperature diameter)]
+             ["Binary DGM, kg/s"
+              3.0119549833973885e-6 (model/mixed-dgm-mass-flow temperature diameter receiver)]]]
+      (is (< (Math/abs (- (/ actual expected) 1.0)) 1.0e-10) description))))
 
 (defn -main
   [& _]

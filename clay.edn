@@ -1,0 +1,10 @@
+{:base-target-path "target/clay"
+ :subdirs-to-sync ["styles"]
+ :format [:quarto :html]
+ :hide-info-line true
+ :quarto {:lang "ru"
+          :format {:html {:theme :none
+                          :minimal true
+                          :toc false
+                          :html-math-method :mathml
+                          :css "styles/monograph.css"}}}}
