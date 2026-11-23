@@ -113,7 +113,7 @@
     [:text {:x 300 :y 100
             :font-size 17
             :font-family "Old Standard"}
-     "p_A(0) = p_A,sat(T_s)"]
+     "p_1(0) = p_1,sat(T_s)"]
 
     ;; Правая ампула
     [:path {:d "M694,130
@@ -153,11 +153,11 @@
     [:text {:x 700 :y 100
             :font-size 17
             :font-family "Old Standard"}
-     "p_A(L) = 0"]
+     "p_1(L) = 0"]
     [:text {:x 700 :y 120
             :font-size 17
             :font-family "Old Standard"}
-     "p_B(L) = p_g + Q_B / C_trap"]
+     "p_2(L) = p_g + Q_2 / C_trap"]
 
     ;; Ловушка
     [:line {:x1 870 :y1 170 :x2 900 :y2 170
