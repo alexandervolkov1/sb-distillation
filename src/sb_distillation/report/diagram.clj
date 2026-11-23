@@ -1,5 +1,10 @@
 (ns sb-distillation.report.diagram)
 
+(defn- subscript [s]
+  [:tspan {:baseline-shift "sub"
+           :font-size "12"}
+   s])
+
 (defn apparatus-sketch []
   [:div {:style {:margin "1.5rem 0 2rem 0"}}
    [:svg {:viewBox "0 0 980 360"
@@ -113,7 +118,9 @@
     [:text {:x 300 :y 100
             :font-size 17
             :font-family "Old Standard"}
-     "p_1(0) = p_1,sat(T_s)"]
+     "p" (subscript "1")
+     "(0) = p" (subscript "1,sat")
+     "(T" (subscript "s") ")"]
 
     ;; Правая ампула
     [:path {:d "M694,130
@@ -153,11 +160,14 @@
     [:text {:x 700 :y 100
             :font-size 17
             :font-family "Old Standard"}
-     "p_1(L) = 0"]
+     "p" (subscript "1") "(L) = 0"]
     [:text {:x 700 :y 120
             :font-size 17
             :font-family "Old Standard"}
-     "p_2(L) = p_g + Q_2 / C_trap"]
+     "p" (subscript "2")
+     "(L) = p" (subscript "g")
+     " + Q" (subscript "2")
+     " / C" (subscript "trap")]
 
     ;; Ловушка
     [:line {:x1 870 :y1 170 :x2 900 :y2 170
