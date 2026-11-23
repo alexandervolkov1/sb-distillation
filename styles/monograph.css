@@ -104,3 +104,24 @@ math[display="block"] {
     line-height: 1.4;
   }
 }
+
+.symbols-table table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.symbols-table th:nth-child(1),
+.symbols-table td:nth-child(1) {
+  width: 23%;
+}
+
+.symbols-table th:nth-child(2),
+.symbols-table td:nth-child(2) {
+  width: 59%;
+}
+
+.symbols-table th:nth-child(3),
+.symbols-table td:nth-child(3) {
+  width: 18%;
+  text-align: center;
+}
