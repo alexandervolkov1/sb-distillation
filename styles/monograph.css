@@ -1,6 +1,11 @@
 :root {
   --report-text-font: "Libertinus Serif";
+  --report-math-font: "Old Standard Math";
+
+  /* Libertinus Serif
+  --report-text-font: "Libertinus Serif";
   --report-math-font: "Libertinus Math";
+  */
 
   /* TeX Gyre Termes
   --report-text-font: "TeX Gyre Termes", "Libertinus Serif";
@@ -9,6 +14,17 @@
 
   /* Old Standard
   --report-text-font: "Old Standard";
+  --report-math-font: "Old Standard Math";
+  */
+
+  /* New Computer Modern + Euler Math
+  --report-text-font: "New Computer Modern";
+  --report-math-font: "Euler Math";
+  */
+
+  /* Literaturnaya requires a separately licensed local installation. */
+  /* Literaturnaya + Old Standard Math
+  --report-text-font: "Literaturnaya";
   --report-math-font: "Old Standard Math";
   */
 }
@@ -115,6 +131,41 @@
 @font-face {
   font-family: "Old Standard Math";
   src: url("fonts/OldStandard-Math.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "New Computer Modern";
+  src: url("fonts/NewCM10-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "New Computer Modern";
+  src: url("fonts/NewCM10-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "New Computer Modern";
+  src: url("fonts/NewCM10-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "New Computer Modern";
+  src: url("fonts/NewCM10-BoldItalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Euler Math";
+  src: url("fonts/Euler-Math.otf") format("opentype");
   font-weight: 400;
   font-style: normal;
 }
