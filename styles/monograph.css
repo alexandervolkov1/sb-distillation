@@ -1,3 +1,88 @@
+:root {
+  --report-text-font: "Libertinus Serif";
+  --report-math-font: "Libertinus Math";
+
+  /* TeX Gyre Termes
+  --report-text-font: "TeX Gyre Termes", "Libertinus Serif";
+  --report-math-font: "TeX Gyre Termes Math";
+  */
+
+  /* Old Standard
+  --report-text-font: "Old Standard";
+  --report-math-font: "Old Standard Math";
+  */
+}
+
+@font-face {
+  font-family: "Libertinus Serif";
+  src: url("fonts/LibertinusSerif-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Libertinus Serif";
+  src: url("fonts/LibertinusSerif-Italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Libertinus Serif";
+  src: url("fonts/LibertinusSerif-Bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "Libertinus Serif";
+  src: url("fonts/LibertinusSerif-BoldItalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "Libertinus Math";
+  src: url("fonts/LibertinusMath-Regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("fonts/texgyretermes-regular.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("fonts/texgyretermes-italic.otf") format("opentype");
+  font-weight: 400;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("fonts/texgyretermes-bold.otf") format("opentype");
+  font-weight: 700;
+  font-style: normal;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes";
+  src: url("fonts/texgyretermes-bolditalic.otf") format("opentype");
+  font-weight: 700;
+  font-style: italic;
+}
+
+@font-face {
+  font-family: "TeX Gyre Termes Math";
+  src: url("fonts/texgyretermes-math.otf") format("opentype");
+  font-weight: 400;
+  font-style: normal;
+}
+
 
 @font-face {
   font-family: "Old Standard";
@@ -44,7 +129,7 @@ body {
   padding: 3rem 1.5rem;
   background: white;
   color: black;
-  font-family: "Old Standard", serif;
+  font-family: var(--report-text-font), serif;
   font-size: 1rem;
   line-height: 1.5;
 }
@@ -82,7 +167,7 @@ a {
 }
 
 math {
-  font-family: "Old Standard Math", math;
+  font-family: var(--report-math-font), math;
 }
 
 math[display="block"] {
