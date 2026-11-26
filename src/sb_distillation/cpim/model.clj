@@ -64,3 +64,26 @@
   (/ 1.0
      (+ inverse-ac
         (/ 1.0 ak))))
+
+(defn local-coefficients
+  "Local CPIM coefficients at partial pressures p_1 and p_2.
+  Pressures in Pa, all returned quantities in SI units.
+  Partial pressures must be nonnegative,
+  total pressure must be positive."
+  [{:keys [rt diameter sqrt-m1 sqrt-m2
+           dk1 dk2 k12 mu1 mu2 phi12 phi21 ak]}
+   p1 p2]
+  (let [p (+ p1 p2)
+        x1 (/ p1 p)
+        x2 (/ p2 p)
+        mu (tr/mixture-viscosity x1 x2 mu1 mu2 phi12 phi21)
+        inverse-ac (inverse-continuum-resistance
+                    p mu rt diameter x1 x2 sqrt-m1 sqrt-m2)]
+    {:p          p
+     :x1         x1
+     :x2         x2
+     :mu         mu
+     :d-eff1     (effective-diffusivity p k12 dk1)
+     :d-eff2     (effective-diffusivity p k12 dk2)
+     :inverse-ac inverse-ac
+     :a          (pressure-resistance inverse-ac ak)}))
