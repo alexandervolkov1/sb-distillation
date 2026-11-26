@@ -19,3 +19,18 @@
             (+ yi (* (/ h 6.0)
                      (+ a (* 2.0 b) (* 2.0 c) d))))
           y k1 k2 k3 k4)))
+
+(defn rk4-step-doubling
+  "y_f, e - RK4 step with local error estimation
+  using step doubling.
+  Returns the fine state and the estimated signed
+  correction (y_f - y_c)/15.
+  h is a signed integration step."
+  [f z y h]
+  (let [half-h (* 0.5 h)
+        coarse (rk4-step f z y h)
+        middle (rk4-step f z y half-h)
+        fine (rk4-step f (+ z half-h) middle half-h)
+        error (mapv #(/ (- %1 %2) 15.0) fine coarse)]
+    {:state fine
+     :error error}))
