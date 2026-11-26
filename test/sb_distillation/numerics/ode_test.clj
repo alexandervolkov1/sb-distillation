@@ -415,3 +415,118 @@
     (is (= :success status))
     (is (= end z))
     (is (state-close? [(- end start)] state 1.0e-14))))
+
+(deftest rk4-subnormal-increments-test
+  (let [h Double/MIN_VALUE
+        stages (atom [])
+        rhs (fn [_ [y]] (swap! stages conj y) [10.0])]
+    (testing "A subnormal step retains its representable stage and final increments"
+      (is (= [(* 10.0 h)] (ode/rk4-step rhs 0.0 [0.0] h)))
+      (is (= [0.0 (* 5.0 h) (* 5.0 h) (* 10.0 h)] @stages))
+      (let [{:keys [state error]} (ode/rk4-step-doubling rhs 0.0 [0.0] h)]
+        (is (= [(* 10.0 h)] state))
+        (is (every? zero? error))))
+    (testing "Half of the least positive double rounds to even"
+      (is (= [0.0] (ode/rk4-step (constantly [0.5]) 0.0 [0.0] h)))
+      (is (= [h] (ode/rk4-step (constantly [(Math/nextUp 0.5)]) 0.0 [0.0] h))))
+    (testing "A subnormal slope can accumulate a normal increment over a long step"
+      (let [step 1.0e308
+            expected (* h step)]
+        (is (state-close? [expected] (ode/rk4-step (constantly [h]) 0.0 [0.0] step)
+                          (* 4.0 (Math/ulp expected))))))))
+
+(deftest error-normalization-representability-test
+  (let [smallest Double/MIN_VALUE
+        state-scale (Math/scalb 1.0 (int 1023))
+        rel-tol (Math/scalb 1.0 (int 20))
+        correction (Math/scalb 1.0 (int -30))]
+    (testing "Overflow of the denominator can still leave a nonzero subnormal result"
+      (is (= (* 2.0 smallest)
+             (ode/normalized-error [state-scale] [state-scale] [correction] smallest rel-tol))))
+    (testing "An overflowing scale still distinguishes results on either side of underflow"
+      (let [half-unit-correction (Math/scalb 1.0 (int -50))
+            error (fn [value] (ode/normalized-error [state-scale] [state-scale]
+                                                     [value] smallest 4.0))]
+        (is (zero? (error half-unit-correction)))
+        (is (= smallest (error (Math/nextUp half-unit-correction))))))
+    (testing "Genuine overflow and underflow of the ratio follow double semantics"
+      (is (= ##Inf (ode/normalized-error [0.0] [0.0] [1.0] smallest 0.0)))
+      (is (zero? (ode/normalized-error [0.0] [0.0] [smallest] 4.0 0.0))))
+    (testing "A subnormal scale retains a fractional contribution from the relative tolerance"
+      (is (close? (/ 2.0 3.0)
+                  (ode/normalized-error [smallest] [smallest] [smallest] smallest 0.5)
+                  1.0e-14)))
+    (testing "A non-finite correction cannot disappear in the component maximum"
+      (is (= ##Inf (ode/normalized-error [1.0e308] [1.0e308] [##Inf] 1.0e308 1.0)))
+      (doseq [corrections [[##NaN 1.0] [1.0 ##NaN]]]
+        (is (Double/isNaN (ode/normalized-error [0.0 0.0] [0.0 0.0] corrections 1.0 0.0)))))))
+
+(deftest adaptive-representable-step-bounds-test
+  (doseq [direction [1.0 -1.0]]
+    (testing (str "Rounded step bounds with direction " direction)
+      (doseq [[start minimum maximum expected-step]
+              [[1.0e16 1.0 3.0 2.0] [(+ 1.0e16 2.0) 3.0 6.0 4.0]]]
+        (let [end (+ start (* direction 8.0))
+              {:keys [status z state profile]}
+              (ode/integrate (constantly [1.0]) start end [0.0]
+                             {:initial-step 3.0 :min-step minimum :max-step maximum})
+              steps (mapv (fn [[a b]] (* direction (- (:z b) (:z a)))) (partition 2 1 profile))]
+          (is (= :success status))
+          (is (= end z))
+          (is (state-close? [(- end start)] state 1.0e-14))
+          (is (= expected-step (first steps)))
+          (is (every? #(<= minimum % maximum) (butlast steps)))
+          (is (< 0.0 (peek steps) (Math/nextUp maximum)))))
+      (testing "An empty representable step range fails before calling the RHS"
+        (let [start 1.0e16
+              calls (atom 0)
+              result (ode/integrate (fn [_ _] (swap! calls inc) [1.0])
+                                    start (+ start (* direction 8.0)) [0.0]
+                                    {:initial-step 3.0 :min-step 3.0 :max-step 3.0})]
+          (is (= :failed (:status result)))
+          (is (= :step-size-unrepresentable (:reason result)))
+          (is (zero? (:attempts result)))
+          (is (zero? @calls)))))))
+
+(deftest adaptive-rounded-endpoint-stages-test
+  (doseq [direction [1.0 -1.0]
+          [start end step] [[1.0e16 (+ 1.0e16 (* direction 6.0)) 6.0]
+                            [(* direction 1.0e16) direction 1.0e16]]]
+    (testing (str "Endpoint and RHS coordinates from " start " to " end)
+      (let [coordinates (atom [])
+            rhs (fn [z _] (swap! coordinates conj z) [1.0])
+            {:keys [status z state profile]} (ode/integrate rhs start end [0.0] {:initial-step step})
+            lower (min start end)
+            upper (max start end)
+            displacement (- end start)]
+        (is (= :success status))
+        (is (= end z (peek @coordinates)))
+        (is (every? #(<= lower % upper) @coordinates))
+        (is (every? #(<= lower (:z %) upper) profile))
+        (is (state-close? [displacement] state (* 4.0 (Math/ulp displacement))))))))
+
+(deftest adaptive-rounded-retry-test
+  (let [start 1.0e16]
+    (doseq [direction [1.0 -1.0]]
+      (let [rhs (fn [_ [y]] [(* direction 0.25 y)])
+            end (+ start (* direction 8.0))]
+        (testing "Error control uses the rounded step and retries at a strictly smaller displacement"
+          ;; The Richardson estimate for exp(0.75) lies below this tolerance.
+          ;; For exp(1), the estimate exceeds it. The next grid point is 2 units away.
+          (let [opts {:initial-step 3.0 :abs-tol 3.0e-4 :rel-tol 0.0}
+                rejected (ode/integrate rhs start end [1.0] (assoc opts :max-attempts 1))
+                retried (ode/integrate rhs start end [1.0] (assoc opts :max-attempts 2))]
+            (is (= :max-attempts (:reason rejected)))
+            (is (= [{:z start :state [1.0]}] (:profile rejected)))
+            (is (= :max-attempts (:reason retried)))
+            (is (= 2 (:attempts retried)))
+            (is (= [start (+ start (* direction 2.0))] (mapv :z (:profile retried))))
+            (is (state-close? [(Math/exp 0.5)] (:state retried) 3.0e-5))))
+        (testing "A rejected one-ULP step cannot be retried at the same coordinate"
+          (let [result (ode/integrate rhs start end [1.0]
+                                      {:initial-step 2.0 :abs-tol 1.0e-12 :rel-tol 0.0})]
+            (is (= :failed (:status result)))
+            (is (= :step-too-small (:reason result)))
+            (is (= 1 (:attempts result)))
+            (is (= :error-too-large (get-in result [:last-rejection :reason])))
+            (is (= [{:z start :state [1.0]}] (:profile result)))))))))
