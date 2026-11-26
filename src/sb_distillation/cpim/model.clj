@@ -54,3 +54,13 @@
         (+ (* x1 sqrt-m1)
            (* x2 sqrt-m2)))
      (* 32.0 viscosity rt)))
+
+(defn pressure-resistance
+  "A - Interpolated CPIM pressure resistance coefficient
+  in (kg/mol)^0.5/s.
+  Inverse A_C in s*(mol/kg)^0.5,
+  A_K in (kg/mol)^0.5/s."
+  [inverse-ac ak]
+  (/ 1.0
+     (+ inverse-ac
+        (/ 1.0 ak))))
