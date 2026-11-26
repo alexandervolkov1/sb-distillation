@@ -149,3 +149,53 @@
            :reason (:type data)
            :details data}
           (throw ex))))))
+
+(def default-options
+  {:abs-tol      1.0e-8
+   :rel-tol      1.0e-6
+   :safety       0.9
+   :min-factor   0.2
+   :max-factor   5.0
+   :max-attempts 100000
+   :valid-state? (constantly true)})
+
+(defn- prepare-options
+  "Prepare and validate adaptive integration options.
+  span is the positive integration interval length.
+  Step sizes are positive magnitudes."
+  [span options]
+  (when-not (and (finite-number? span) (pos? span))
+    (throw (ex-info "Invalid integration interval"
+                    {:span span})))
+
+  (let [{:keys [abs-tol rel-tol safety
+                min-factor max-factor max-attempts
+                initial-step min-step max-step
+                valid-state?]
+         :as opts}
+        (merge default-options
+               {:initial-step (/ span 100.0)
+                :min-step     (* span 1.0e-12)
+                :max-step     span}
+               options)]
+
+    (when-not
+     (and
+      (every? finite-number?
+              [abs-tol rel-tol safety
+               min-factor max-factor
+               initial-step min-step max-step])
+      (pos? abs-tol)
+      (>= rel-tol 0.0)
+      (< 0.0 safety 1.0)
+      (< 0.0 min-factor 1.0)
+      (>= max-factor 1.0)
+      (< 0.0 min-step)
+      (<= min-step initial-step max-step)
+      (integer? max-attempts)
+      (pos? max-attempts)
+      (ifn? valid-state?))
+      (throw (ex-info "Invalid integration options"
+                      {:options opts})))
+
+    opts))
