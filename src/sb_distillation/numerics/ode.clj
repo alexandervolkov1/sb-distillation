@@ -72,15 +72,20 @@
   using step doubling.
   Returns the fine state and the estimated signed
   correction (y_f - y_c)/15.
-  h is a signed integration step."
-  [f z y h]
-  (let [half-h (* 0.5 h)
-        coarse (rk4-step f z y h)
-        middle (rk4-step f z y half-h)
-        fine (rk4-step f (+ z half-h) middle half-h)
-        error (mapv #(/ (- %1 %2) 15.0) fine coarse)]
-    {:state fine
-     :error error}))
+  h is a signed integration step.
+  valid-state? checks problem-specific state constraints."
+  ([f z y h]
+   (rk4-step-doubling f z y h (constantly true)))
+
+  ([f z y h valid-state?]
+   (let [half-h (* 0.5 h)
+         coarse (rk4-step f z y h valid-state?)
+         middle (rk4-step f z y half-h valid-state?)
+         fine (rk4-step f (+ z half-h)
+                        middle half-h valid-state?)
+         error (mapv #(/ (- %1 %2) 15.0) fine coarse)]
+     {:state fine
+      :error error})))
 
 (defn normalized-error
   "E - Dimensionless maximum normalized local error.
@@ -108,3 +113,39 @@
                  (* safety (Math/pow error -0.2)))]
     (* h (max min-factor
               (min max-factor factor)))))
+
+(defn attempt-step
+  "Attempt one adaptive RK4 integration step.
+  Returns an accepted state or a rejection reason.
+  Programming errors are propagated."
+  [f z y h valid-state? abs-tol rel-tol]
+  (try
+    (let [{:keys [state error]}
+          (rk4-step-doubling f z y h valid-state?)
+
+          e (normalized-error
+             y state error abs-tol rel-tol)]
+
+      (cond
+        (not (finite-number? e))
+        {:status :rejected
+         :reason :non-finite-error}
+
+        (<= e 1.0)
+        {:status :accepted
+         :state state
+         :error e}
+
+        :else
+        {:status :rejected
+         :reason :error-too-large
+         :error e}))
+
+    (catch clojure.lang.ExceptionInfo ex
+      (let [data (ex-data ex)]
+        (if (#{:invalid-state
+               :non-finite-derivatives} (:type data))
+          {:status :rejected
+           :reason (:type data)
+           :details data}
+          (throw ex))))))
