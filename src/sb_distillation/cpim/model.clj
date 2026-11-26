@@ -42,3 +42,15 @@
   (/ 1.0
      (+ (/ pressure k12)
         (/ 1.0 dk))))
+
+(defn inverse-continuum-resistance
+  "1/A_C - Inverse continuum pressure resistance coefficient
+  in s*(mol/kg)^0.5.
+  Pressure in Pa, viscosity in Pa*s, RT in J/mol,
+  diameter in m, mole fractions dimensionless,
+  square roots of molar masses in (kg/mol)^0.5."
+  [pressure viscosity rt diameter x1 x2 sqrt-m1 sqrt-m2]
+  (/ (* pressure diameter diameter
+        (+ (* x1 sqrt-m1)
+           (* x2 sqrt-m2)))
+     (* 32.0 viscosity rt)))
