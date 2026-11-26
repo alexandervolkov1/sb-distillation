@@ -39,7 +39,26 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 
 - `molecular-resistance` computes `A_K`. `prepare-coefficients` prepares `RT`, diameter, square roots of molar masses, `D_{K,i}`, `K_12`, pure viscosities, Wilke factors, and `A_K` once per tube setup.
 - `effective-diffusivity` computes `𝒟_i` (`D_eff,i` in code). `inverse-continuum-resistance` computes `1/A_C`, and `pressure-resistance` combines it with `A_K` to obtain `A`. `local-coefficients` uses the current partial pressures to compute `p`, mole fractions, mixture viscosity, both effective diffusivities, `1/A_C`, and `A`. It requires positive total pressure.
-- `pressure-derivatives` returns `[dp_1/dz dp_2/dz]` for the given state and fluxes. The derivatives follow increasing `z` from source to receiver. Backward integration, boundary conditions, and shooting are the next solver stage. [Development roadmap](ROADMAP.md)
+- `pressure-derivatives` returns `[dp_1/dz dp_2/dz]` for the given state and fluxes. The derivatives follow increasing `z` from source to receiver.
+
+### Numerical core
+
+The numerical namespaces operate on caller-supplied functions. The planned physical CPIM solver will assemble the pressure and flux boundary conditions, adapt the CPIM right-hand side for backward integration, and construct and bracket the inlet saturation residual for shooting. It will apply physical admissibility checks and interpret numerical failures. [Development roadmap](ROADMAP.md)
+
+**`sb-distillation.numerics.ode`** integrates vector initial-value problems in either direction using adaptive classical RK4. The caller supplies `f(z, state)` and can supply a `valid-state?` predicate. States are checked before each RHS evaluation and at the end of each RK4 step. Derivative vectors must match the state dimension. [ODE source][ode] · [ODE tests][ode-tests]
+
+- `rk4-step` advances one signed step. `rk4-step-doubling` compares one full step with two half steps and returns the fine state as `:state` and the signed Richardson correction `(fine - coarse)/15` as `:error`.
+- `normalized-error` takes the largest componentwise ratio of the absolute correction to `abs-tol + rel-tol * max(|initial|, |fine|)`. `next-step-size` scales the signed step by a bounded factor based on `safety * E^(-1/5)`, using the maximum growth factor at zero error.
+- `attempt-step` accepts the fine state at finite normalized error `E <= 1`. Its map reports `:accepted` with `:state` and `:error`, or `:rejected` with `:reason`. Excessive error includes the error estimate. Invalid states and nonfinite derivatives include stage data in `:details`. Nonfinite error also rejects the trial. Invalid derivative shape and unexpected RHS exceptions propagate.
+- `integrate` applies `default-options` and caller overrides for tolerances, step control, and attempt limits. It returns `:status`, `:z`, `:state`, `:attempts`, and an accepted `:profile` of coordinate and state maps. Attempts include rejections. Success reaches the supplied end coordinate. Failure preserves the accepted profile and reports `:max-attempts`, `:step-too-small`, `:coordinate-stagnation`, or `:step-size-unrepresentable` in `:reason`. A step-too-small result also includes `:last-rejection`. Invalid arguments, options, or initial states throw.
+
+`integrate` uses the displacement between representable double coordinates for each trial. A final step may be shorter than `:min-step`, and stage coordinates can coincide near the resolution limit. States and derivatives must be finite in double precision. Wider arithmetic protects the RK4 weighted increment and the error scale at extreme magnitudes. Scaling protects the Richardson subtraction when its intermediate difference overflows.
+
+**`sb-distillation.numerics.root`** provides `bisect` for a continuous scalar residual on an ordered finite interval. An endpoint can satisfy the absolute tolerance directly. Otherwise, the endpoints must have opposite signs. Each new midpoint counts as one iteration, and endpoint values are reused. The result contains `:status`, `:x`, `:fx`, `:bracket`, and `:iterations`. A `:success` satisfies `abs(f(x)) <= f-tol`. A `:failed` result includes `:reason`. The reasons `:not-bracketed`, `:max-iterations`, and `:midpoint-stagnation` return the current endpoint with smaller absolute residual. `:non-finite-value` identifies the offending evaluation. Invalid arguments or nonnumeric residuals throw, and user exceptions propagate. [Root source][root] · [Bisection tests][root-tests]
+
+Bisection coordinates use double precision and can exhaust the available midpoints. The residual and tolerance retain their Clojure numeric types. Comparison of two floating-point values uses the floating-point path. Mixed comparisons use exact cross products with binary floating-point operands converted to their exact values. This preserves the residual sign and tolerance comparison even outside the double range.
+
+### Reference calculations and verification
 
 - Legacy references preserve ampoule geometry, vapor pressures, conductance and Knudsen corrections, viscosity, diffusion, and pure and binary Dusty Gas Model (DGM) rates. Binary DGM uses RK4 and bisection. Some legacy APIs use °C, Torr, or g/h. The early empirical estimate sets receiver pressure by solid-Sb saturation. DGM and CPIM theory use zero outlet Sb₄ pressure. [Legacy code][legacy] · [Legacy units and assumptions][legacy-docs]
 - [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
@@ -65,11 +84,15 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [young-todd]: https://www.sciencedirect.com/science/article/pii/S0017931005004904
 [transport]: src/sb_distillation/cpim/transport.clj
 [model]: src/sb_distillation/cpim/model.clj
+[ode]: src/sb_distillation/numerics/ode.clj
+[root]: src/sb_distillation/numerics/root.clj
 [legacy]: src/sb_distillation/reference/legacy.clj
 [legacy-docs]: https://github.com/alexandervolkov1/sb-distillation/blob/4784a763ff7d0c385fdeb27f44311637af7b2950/README.md#справочные-расчёты
 [plot]: src/sb_distillation/reference/plot.clj
 [notebook]: notebooks/sb_distillation/analysis.clj
 [cpim-tests]: test/sb_distillation/cpim/transport_test.clj
 [model-tests]: test/sb_distillation/cpim/model_test.clj
+[ode-tests]: test/sb_distillation/numerics/ode_test.clj
+[root-tests]: test/sb_distillation/numerics/root_test.clj
 [tests]: test/sb_distillation_test.clj
 [nist]: https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440360&Mask=4
