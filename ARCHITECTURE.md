@@ -23,7 +23,7 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 ## Software architecture
 
 - `sb-distillation-theory` owns the physical theory and mathematical definitions. `src/` holds the Clojure model and numerical code, `test/` holds automated checks, and `notebooks/` holds Clay experiments and visualization.
-- [CPIM transport][transport] (`sb-distillation.cpim.transport`) is the new SI implementation. `default-parameters` supplies the gas, Boltzmann, and Avogadro constants, the two molar masses and effective collision diameters, and the H₂ Sutherland parameters. The applicable functions receive the parameter map explicitly. Geometry and operating conditions are separate inputs.
+- `sb-distillation.cpim.transport` implements the basic coefficients in SI. `default-parameters` supplies the physical constants, species molar masses and collision diameters, and H₂ Sutherland parameters. Functions receive the parameters and operating inputs explicitly. [CPIM transport][transport]
 
 | Implemented CPIM function | Quantity and dependencies |
 | --- | --- |
@@ -31,12 +31,16 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 | `binary-diffusivity-factor` | `K_12` in Pa·m²/s from temperature, molecular reduced mass, and mean collision diameter. |
 | `binary-diffusivity` | `D_12` in m²/s from `K_12` and local total pressure. |
 | `sb4-viscosity` | `μ_1` in Pa·s from temperature and hard-sphere Sb₄ parameters. |
+| `h2-viscosity` | `μ_2` in Pa·s from temperature and Sutherland parameters. |
+| `wilke-interaction-factor` | Dimensionless `Φ_ij` from ordered viscosities and molar masses. |
+| `mixture-viscosity` | `μ` in Pa·s from mole fractions, pure viscosities, and cross interaction factors. |
 
-The CPIM namespace currently ends at these four functions. H₂ and mixture viscosities, interpolation coefficients, the ODE and solver, and mass-flow calculation are pending CPIM work. [Development roadmap](ROADMAP.md)
+The next CPIM stage prepares constant coefficients and implements the interpolation coefficients. The ODE, solver, and mass-flow calculation follow. [Development roadmap](ROADMAP.md)
 
 - Legacy references preserve ampoule geometry, vapor pressures, conductance and Knudsen corrections, viscosity, diffusion, and pure and binary Dusty Gas Model (DGM) rates. Binary DGM uses RK4 and bisection. Some legacy APIs use °C, Torr, or g/h. The early empirical estimate sets receiver pressure by solid-Sb saturation. DGM and CPIM theory use zero outlet Sb₄ pressure. [Legacy code][legacy] · [Legacy units and assumptions][legacy-docs]
 - [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
-- [Automated tests][tests] cover legacy geometry, saturation-pressure correlations, and four historical transport outputs. The liquid-Sb test at 700 °C is below the Antoine fit interval of 1058–1373 K. It checks the extrapolated correlation output. The suite has no direct CPIM coefficient or solver coverage. [NIST fit data][nist]
+- Automated tests cover all seven basic CPIM functions using independent numerical references, scaling laws, and viscosity limits and symmetries. [CPIM tests][cpim-tests]
+- Legacy tests cover geometry, saturation pressures, and four historical transport outputs. The liquid-Sb test at 700 °C checks the correlation below its 1058–1373 K Antoine fit interval. [Legacy tests][tests] · [NIST fit data][nist]
 
 Run from the project root using the aliases in [deps.edn](deps.edn).
 
@@ -60,5 +64,6 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [legacy-docs]: https://github.com/alexandervolkov1/sb-distillation/blob/4784a763ff7d0c385fdeb27f44311637af7b2950/README.md#справочные-расчёты
 [plot]: src/sb_distillation/reference/plot.clj
 [notebook]: notebooks/sb_distillation/analysis.clj
+[cpim-tests]: test/sb_distillation/cpim/transport_test.clj
 [tests]: test/sb_distillation_test.clj
 [nist]: https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440360&Mask=4
