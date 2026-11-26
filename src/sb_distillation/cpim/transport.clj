@@ -52,3 +52,19 @@
   Pressure in Pa, diffusion factor [Pa*m^2/s]."
   [factor pressure]
   (/ factor pressure))
+
+(defn sb4-viscosity
+  "mu_1 - Dynamic viscosity of Sb4 in Pa*s,
+  using the hard-sphere model.
+  Temperature in K."
+  [{:keys [boltzmann-const
+           avogadro-const
+           sb4-molar-mass
+           sb4-collision-diameter]}
+   temp]
+  (let [mass (/ sb4-molar-mass avogadro-const)
+        sigma sb4-collision-diameter]
+    (* (/ 5.0 (* 16.0 sigma sigma))
+       (Math/sqrt
+        (/ (* mass boltzmann-const temp)
+           Math/PI)))))
