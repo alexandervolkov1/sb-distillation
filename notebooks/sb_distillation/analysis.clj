@@ -9,5 +9,3 @@
 ^{:kindly/kind :kind/html
   :kindly/hide-code true}
 (apparatus/boundary-conditions-svg)
-
-;; # Численное моделирование переноса сурьмы

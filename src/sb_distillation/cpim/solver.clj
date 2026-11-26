@@ -1,7 +1,5 @@
 (ns sb-distillation.cpim.solver)
 
-(ns sb-distillation.cpim.solver)
-
 (defn cross-sectional-area
   "S - Tube cross-sectional area in m^2.
   Inner diameter in m."
