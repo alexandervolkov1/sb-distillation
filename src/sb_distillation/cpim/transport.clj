@@ -68,3 +68,16 @@
        (Math/sqrt
         (/ (* mass boltzmann-const temp)
            Math/PI)))))
+
+(defn h2-viscosity
+  "mu_2 - Dynamic viscosity of H2 in Pa*s,
+  using Sutherland's law.
+  Temperature in K."
+  [{:keys [h2-reference-viscosity
+           h2-reference-temp
+           h2-sutherland-constant]}
+   temp]
+  (* h2-reference-viscosity
+     (Math/pow (/ temp h2-reference-temp) 1.5)
+     (/ (+ h2-reference-temp h2-sutherland-constant)
+        (+ temp h2-sutherland-constant))))
