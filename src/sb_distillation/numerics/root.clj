@@ -1,10 +1,28 @@
-(ns sb-distillation.numerics.root)
+(ns sb-distillation.numerics.root
+  (:import [java.math BigDecimal]))
 
 (defn- finite-number?
   "Return true if x is a finite number."
   [x]
   (and (number? x)
-       (Double/isFinite (double x))))
+       (or (not (float? x)) (Double/isFinite (double x)))))
+
+(defn- magnitude-fraction
+  [x]
+  (cond
+    (ratio? x) [(.abs ^BigDecimal (bigdec (numerator x))) (bigdec (denominator x))]
+    ;; The constructor preserves the exact binary float value.
+    (float? x) [(.abs (BigDecimal. (double x))) 1M]
+    :else [(.abs ^BigDecimal (bigdec x)) 1M]))
+
+(defn- magnitude-at-most?
+  [a b]
+  (if (and (float? a) (float? b))
+    (<= (Math/abs (double a)) (Math/abs (double b)))
+    (let [[^BigDecimal a-num ^BigDecimal a-den] (magnitude-fraction a)
+          [^BigDecimal b-num ^BigDecimal b-den] (magnitude-fraction b)]
+      ;; Compare cross products exactly, including nonterminating ratios.
+      (not (pos? (.compareTo (.multiply a-num b-den) (.multiply b-num a-den)))))))
 
 (defn- opposite-signs?
   "Return true if a and b have strictly opposite signs."
@@ -23,17 +41,18 @@
 
 (defn bisect
   "Find a root of a continuous scalar function using bisection.
-  a and b are finite ordered interval endpoints.
+  a and b are finite ordered interval endpoints evaluated as doubles.
   f-tol is the absolute residual tolerance in function units.
   max-iterations limits the number of midpoint evaluations.
-  Success requires abs(f(x)) <= f-tol."
+  Success requires abs(f(x)) <= f-tol. Residuals retain their original numeric type."
   [f a b f-tol max-iterations]
 
   (when-not
    (and (ifn? f)
-        (every? finite-number? [a b f-tol])
+        (every? #(and (number? %) (Double/isFinite (double %))) [a b])
+        (finite-number? f-tol)
         (< (double a) (double b))
-        (>= f-tol 0.0)
+        (not (neg? f-tol))
         (integer? max-iterations)
         (pos? max-iterations))
     (throw (ex-info "Invalid bisection arguments"
@@ -47,7 +66,7 @@
               (when-not (number? fx)
                 (throw (ex-info "Invalid function value"
                                 {:x x :fx fx})))
-              (double fx)))
+              fx))
 
           (result [status reason x fx a b iterations]
             (cond-> {:status status
@@ -74,16 +93,15 @@
           (result :failed :non-finite-value
                   b fb a b iterations)
 
-          (<= (Math/abs (double fa)) f-tol)
+          (magnitude-at-most? fa f-tol)
           (result :success nil a fa a b iterations)
 
-          (<= (Math/abs (double fb)) f-tol)
+          (magnitude-at-most? fb f-tol)
           (result :success nil b fb a b iterations)
 
           :else
           (let [[best-x best-fx]
-                (if (<= (Math/abs (double fa))
-                        (Math/abs (double fb)))
+                (if (magnitude-at-most? fa fb)
                   [a fa]
                   [b fb])]
 
@@ -111,7 +129,7 @@
                       (result :failed :non-finite-value
                               c fc a b iterations)
 
-                      (<= (Math/abs (double fc)) f-tol)
+                      (magnitude-at-most? fc f-tol)
                       (result :success nil
                               c fc a b iterations)
 

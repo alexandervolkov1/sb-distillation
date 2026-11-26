@@ -219,3 +219,75 @@
 (deftest negative-subnormal-tolerance-regression-test
   (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Invalid bisection arguments"
                         (root/bisect (constantly 0.0) -1.0 1.0 -1.0e-400M 1))))
+
+(deftest exact-decimal-residuals-outside-the-double-range-test
+  (doseq [scale [1.0e400M 1.0e-400M]]
+    (testing (str "Nonzero endpoint residuals at scale " scale)
+      (doseq [fx [scale (- scale)]]
+        (let [f (constantly fx)
+              rejected (root/bisect f -1.0 1.0 0.0 1)
+              accepted (root/bisect f -1.0 1.0 scale 1)]
+          (is (= [:failed :not-bracketed] ((juxt :status :reason) rejected)))
+          (is (identical? fx (:fx rejected)))
+          (is (= :success (:status accepted)))
+          (is (identical? fx (:fx accepted))))))
+    (testing "Opposite endpoint signs allow a midpoint evaluation"
+      (let [f (fn [x] (* scale (+ 1M (* 3M (bigdec x)))))
+            {:keys [result calls]} (observed-bisection f -1.0 1.0 scale 1)]
+        (is (= {:status :success :x 0.0 :fx scale :bracket [-1.0 1.0] :iterations 1}
+               result))
+        (is (instance? java.math.BigDecimal (:fx result)))
+        (is (= [-1.0 1.0 0.0] calls))))))
+
+(deftest mixed-numeric-magnitude-test
+  (doseq [[label fx tolerance expected]
+          [["An integer above the double precision limit" 9007199254740993N 9007199254740992.0 :failed]
+           ["A large integer equals a decimal" 9007199254740993N 9007199254740993M :success]
+           ["A ratio just below a large integer" 9007199254740993N 18014398509481985/2 :failed]
+           ["A large integer just above a negative ratio's magnitude"
+            -18014398509481985/2 9007199254740993N :success]
+           ["The absolute value of the smallest long" Long/MIN_VALUE 9223372036854775808N :success]
+           ["A terminating ratio equals a decimal" -3/4 0.75M :success]
+           ["A decimal strictly below one third" -1/3 0.3333333333333333333333333333333333M :failed]
+           ["One third is strictly above this decimal" 0.3333333333333333333333333333333333M 1/3 :success]
+           ["Binary double 0.1 exceeds decimal 0.1" 0.1 0.1M :failed]
+           ["Binary double 0.1 exceeds the ratio one tenth" 0.1 1/10 :failed]
+           ["The ratio one tenth is smaller than binary double 0.1" 1/10 0.1 :success]
+           ["Binary double 0.1 equals its full decimal expansion"
+            0.1 0.1000000000000000055511151231257827021181583404541015625M :success]
+           ["Binary float 0.1 exceeds binary double 0.1" (float 0.1) 0.1 :failed]
+           ["Binary float 0.1 equals its exact ratio" (float -0.1) 13421773/134217728 :success]]]
+    (testing label
+      (let [{:keys [status reason iterations] :as result}
+            (root/bisect (constantly fx) -1.0 1.0 tolerance 1)]
+        (is (= expected status))
+        (is (= (when (= expected :failed) :not-bracketed) reason))
+        (is (zero? iterations))
+        (is (identical? fx (:fx result)))))))
+
+(deftest best-endpoint-with-mixed-precision-test
+  (testing "Stagnation returns the boundary with the strictly smaller magnitude"
+    (let [a 1.0
+          b (Math/nextUp a)]
+      (doseq [[fa fb] [[-1.00000000000000001M 1.0]
+                       [-9007199254740993N 18014398509481985/2]]]
+        (let [f (fn [x] (if (= x a) fa fb))
+              {:keys [result calls]} (observed-bisection f a b 0 2)]
+          (is (= {:status :failed :reason :midpoint-stagnation :x b :fx fb
+                  :bracket [a b] :iterations 0} result))
+          (is (identical? fb (:fx result)))
+          (is (= [a b] calls))))))
+  (testing "The best boundary is selected from the refined bracket after exhaustion"
+    (let [f (fn [x] (cond (neg? x) -3.0 (zero? x) -1.00000000000000001M :else 1.0))
+          {:keys [result calls]} (observed-bisection f -1.0 1.0 0.0 1)]
+      (is (= {:status :failed :reason :max-iterations :x 1.0 :fx 1.0
+              :bracket [0.0 1.0] :iterations 1} result))
+      (is (= [-1.0 1.0 0.0] calls)))))
+
+(deftest non-finite-float-residuals-and-tolerances-test
+  (doseq [value [Float/NaN Float/POSITIVE_INFINITY Float/NEGATIVE_INFINITY]]
+    (let [{:keys [status reason fx]} (root/bisect (constantly value) -1.0 1.0 0.0 1)]
+      (is (= [:failed :non-finite-value] [status reason]))
+      (is (identical? value fx)))
+    (is (thrown-with-msg? clojure.lang.ExceptionInfo #"Invalid bisection arguments"
+                          (root/bisect identity -1.0 1.0 value 1)))))
