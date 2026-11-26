@@ -49,3 +49,15 @@
                           (max (Math/abs (double yi))
                                (Math/abs (double fi)))))))
                y fine error)))
+
+(defn next-step-size
+  "h_new - Adjust the signed RK4 integration step
+  using the normalized local error E.
+  Safety and step adjustment factors are dimensionless.
+  Error must be finite and nonnegative."
+  [h error safety min-factor max-factor]
+  (let [factor (if (zero? error)
+                 max-factor
+                 (* safety (Math/pow error -0.2)))]
+    (* h (max min-factor
+              (min max-factor factor)))))
