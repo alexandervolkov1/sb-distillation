@@ -27,7 +27,7 @@
 (defn binary-diffusivity-factor
   "K_12 = p * D_12 - Pressure-independent binary diffusion factor
   [Pa*m^2/s], using the hard-sphere Chapman-Enskog model."
-  [{:keys [bolzman-const
+  [{:keys [boltzmann-const
            avogadro-const
            sb4-molar-mass
            h2-molar-mass
@@ -40,7 +40,7 @@
         reduced-mass (/ (* sb4-molar-mass h2-molar-mass)
                         (* avogadro-const
                            (+ sb4-molar-mass h2-molar-mass)))
-        kt (* bolzman-const temp)]
+        kt (* boltzmann-const temp)]
     (* (/ (* 3.0 kt)
           (* 16.0 sigma sigma))
        (Math/sqrt
