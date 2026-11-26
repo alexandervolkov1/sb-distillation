@@ -34,3 +34,18 @@
         error (mapv #(/ (- %1 %2) 15.0) fine coarse)]
     {:state fine
      :error error}))
+
+(defn normalized-error
+  "E - Dimensionless maximum normalized local error.
+  y and fine are the initial and fine state vectors.
+  error is the estimated local correction vector.
+  abs-tol has state units, rel-tol is dimensionless."
+  [y fine error abs-tol rel-tol]
+  (reduce max 0.0
+          (map (fn [yi fi ei]
+                 (/ (Math/abs (double ei))
+                    (+ abs-tol
+                       (* rel-tol
+                          (max (Math/abs (double yi))
+                               (Math/abs (double fi)))))))
+               y fine error)))
