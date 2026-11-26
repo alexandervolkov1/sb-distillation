@@ -92,3 +92,14 @@
     (/ (* a a)
        (Math/sqrt
         (* 8.0 (+ 1.0 (/ molar-mass-i molar-mass-j)))))))
+
+(defn mixture-viscosity
+  "mu - Dynamic viscosity of a binary gas mixture in Pa*s,
+  using Wilke's mixing rule.
+  Mole fractions and interaction factors are dimensionless,
+  component viscosities in Pa*s."
+  [x1 x2 mu1 mu2 phi12 phi21]
+  (+ (/ (* x1 mu1)
+        (+ x1 (* x2 phi12)))
+     (/ (* x2 mu2)
+        (+ x2 (* x1 phi21)))))
