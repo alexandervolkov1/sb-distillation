@@ -87,3 +87,22 @@
      :d-eff2     (effective-diffusivity p k12 dk2)
      :inverse-ac inverse-ac
      :a          (pressure-resistance inverse-ac ak)}))
+
+(defn pressure-derivatives
+  "dp_1/dz, dp_2/dz - CPIM partial pressure derivatives
+  in Pa/m.
+  Partial pressures in Pa, molar fluxes in mol/(m^2*s)."
+  [{:keys [rt sqrt-m1 sqrt-m2] :as coefficients}
+   p1 p2 n1 n2]
+  (let [{:keys [x1 x2 d-eff1 d-eff2 a]}
+        (local-coefficients coefficients p1 p2)
+
+        h (- (/ (* x1 n2) d-eff2)
+             (/ (* x2 n1) d-eff1))
+
+        g (- (* a (+ (* sqrt-m1 n1)
+                     (* sqrt-m2 n2))))
+
+        rt-h (* rt h)]
+    [(+ (* x1 g) rt-h)
+     (- (* x2 g) rt-h)]))
