@@ -17,7 +17,7 @@
 
 (defn knudsen-diffusivity
   "D_{K,i} - Knudsen diffusivity in m^2/s.
-  Temperature in K, diameter in m, molar mass [kg/mol]."
+  Temperature in K, diameter in m, molar mass in kg/mol."
   [{:keys [gas-const]} temp diameter molar-mass]
   (* (/ diameter 3.0)
      (Math/sqrt
@@ -26,7 +26,7 @@
 
 (defn binary-diffusivity-factor
   "K_12 = p * D_12 - Pressure-independent binary diffusion factor
-  [Pa*m^2/s], using the hard-sphere Chapman-Enskog model."
+  in Pa*m^2/s, using the hard-sphere Chapman-Enskog model."
   [{:keys [boltzmann-const
            avogadro-const
            sb4-molar-mass
@@ -49,7 +49,7 @@
 
 (defn binary-diffusivity
   "D_12 - Binary diffusivity in m^2/s.
-  Pressure in Pa, diffusion factor [Pa*m^2/s]."
+  Pressure in Pa, diffusion factor in Pa*m^2/s."
   [factor pressure]
   (/ factor pressure))
 
