@@ -1,6 +1,7 @@
 
 (ns sb-distillation-test
   (:require [clojure.test :refer [deftest is run-tests]]
+            [sb-distillation.cpim.model-test]
             [sb-distillation.cpim.transport-test]
             [sb-distillation.reference.legacy :as model]))
 
@@ -108,6 +109,8 @@
 
 (defn -main
   [& _]
-  (let [{:keys [fail error]} (run-tests 'sb-distillation-test 'sb-distillation.cpim.transport-test)]
+  (let [{:keys [fail error]} (run-tests 'sb-distillation-test
+                                       'sb-distillation.cpim.transport-test
+                                       'sb-distillation.cpim.model-test)]
     (when (pos? (+ fail error))
       (System/exit 1))))

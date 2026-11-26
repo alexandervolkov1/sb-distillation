@@ -35,11 +35,15 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 | `wilke-interaction-factor` | Dimensionless `Φ_ij` from ordered viscosities and molar masses. |
 | `mixture-viscosity` | `μ` in Pa·s from mole fractions, pure viscosities, and cross interaction factors. |
 
-The next CPIM stage prepares constant coefficients and implements the interpolation coefficients. The ODE, solver, and mass-flow calculation follow. [Development roadmap](ROADMAP.md)
+`sb-distillation.cpim.model` assembles the isothermal tube coefficients and evaluates the partial-pressure ODE right-hand side. [CPIM model][model]
+
+- `molecular-resistance` computes `A_K`. `prepare-coefficients` prepares `RT`, diameter, square roots of molar masses, `D_{K,i}`, `K_12`, pure viscosities, Wilke factors, and `A_K` once per tube setup.
+- `effective-diffusivity` computes `𝒟_i` (`D_eff,i` in code). `inverse-continuum-resistance` computes `1/A_C`, and `pressure-resistance` combines it with `A_K` to obtain `A`. `local-coefficients` uses the current partial pressures to compute `p`, mole fractions, mixture viscosity, both effective diffusivities, `1/A_C`, and `A`. It requires positive total pressure.
+- `pressure-derivatives` returns `[dp_1/dz dp_2/dz]` for the given state and fluxes. The derivatives follow increasing `z` from source to receiver. Backward integration, boundary conditions, and shooting are the next solver stage. [Development roadmap](ROADMAP.md)
 
 - Legacy references preserve ampoule geometry, vapor pressures, conductance and Knudsen corrections, viscosity, diffusion, and pure and binary Dusty Gas Model (DGM) rates. Binary DGM uses RK4 and bisection. Some legacy APIs use °C, Torr, or g/h. The early empirical estimate sets receiver pressure by solid-Sb saturation. DGM and CPIM theory use zero outlet Sb₄ pressure. [Legacy code][legacy] · [Legacy units and assumptions][legacy-docs]
 - [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
-- Automated tests cover all seven basic CPIM functions using independent numerical references, scaling laws, and viscosity limits and symmetries. [CPIM tests][cpim-tests]
+- Automated tests cover all seven basic transport functions using independent references, scaling laws, and viscosity limits and symmetries. The model tests cover all seven core functions, including coefficient maps, pure-component states, flux linearity, pressure-gradient consistency, and both ODE limits at finite positive pressures. [Transport tests][cpim-tests] · [Model tests][model-tests]
 - Legacy tests cover geometry, saturation pressures, and four historical transport outputs. The liquid-Sb test at 700 °C checks the correlation below its 1058–1373 K Antoine fit interval. [Legacy tests][tests] · [NIST fit data][nist]
 
 Run from the project root using the aliases in [deps.edn](deps.edn).
@@ -60,10 +64,12 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [coefficients]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/93c4a9e09dae96427635c2e8130a058c982b6931/main.typ#L940-L1255
 [young-todd]: https://www.sciencedirect.com/science/article/pii/S0017931005004904
 [transport]: src/sb_distillation/cpim/transport.clj
+[model]: src/sb_distillation/cpim/model.clj
 [legacy]: src/sb_distillation/reference/legacy.clj
 [legacy-docs]: https://github.com/alexandervolkov1/sb-distillation/blob/4784a763ff7d0c385fdeb27f44311637af7b2950/README.md#справочные-расчёты
 [plot]: src/sb_distillation/reference/plot.clj
 [notebook]: notebooks/sb_distillation/analysis.clj
 [cpim-tests]: test/sb_distillation/cpim/transport_test.clj
+[model-tests]: test/sb_distillation/cpim/model_test.clj
 [tests]: test/sb_distillation_test.clj
 [nist]: https://webbook.nist.gov/cgi/cbook.cgi?ID=C7440360&Mask=4

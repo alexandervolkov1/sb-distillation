@@ -2,25 +2,23 @@
 
 ## Current state
 
-- The basic CPIM transport coefficient stage is complete. All seven functions for Knudsen and binary diffusion, pure viscosities, Wilke interaction factors, and mixture viscosity agree with the formulas and SI dimensions in the pinned report. [Implemented functions](ARCHITECTURE.md#software-architecture)
-- `clojure -M:test` runs direct checks of all seven functions against independent numerical values and mathematical properties, alongside the legacy regressions. The Clay analysis notebook builds as a scaffold. [CPIM tests](test/sb_distillation/cpim/transport_test.clj)
+- The CPIM mathematical core is complete and tested. It assembles constant and local coefficients and evaluates both partial-pressure ODE right-hand sides. The seven core functions and seven basic transport functions agree with the pinned report. [Implemented functions](ARCHITECTURE.md#software-architecture)
+- `clojure -M:test` runs independent reference and property checks for the core and transport functions alongside the legacy regressions. Core checks include pure-component states and the continuum and free-molecular ODE limits. [Model tests](test/sb_distillation/cpim/model_test.clj)
 
 ## In progress
 
-- Between coefficient stages.
+- Between the mathematical core and solver stages.
 
 ## Next steps
 
-1. Prepare the quantities constant along the isothermal tube for given geometry and parameters, including `D_{K,i}`, `K_12`, pure viscosities, Wilke interaction factors, and `A_K`.
-2. Compute local pressure, composition, diffusivity, and mixture viscosity. Implement the Bosanquet coefficients `𝒟_i` and pressure resistances `A_C` and `A`. Check the continuum and free-molecular limits. [Theory summary](ARCHITECTURE.md#mathematical-model)
+1. Choose the numerical integration method and agree on error control. Implement integration from the receiver at `z = L` toward the source at `z = 0`.
+2. Implement hydrogen flux and the three pressure boundary conditions. Use a consistent throughput convention for the trap and enforce physical bounds on trial profiles.
+3. Implement shooting with the inlet saturation residual. Find a sign bracket for the nonnegative Sb₄ molar flux, solve for the root, and check the boundary residuals and accepted profile. [Theory summary](ARCHITECTURE.md#mathematical-model)
 
 ## Planned
 
-1. Implement the two partial-pressure ODE right-hand sides and check their signs, units, and limiting forms.
-2. Integrate from the known outlet pressures toward the source. Set up hydrogen input and the trap pressure boundary using a consistent throughput convention. Reject nonphysical trial profiles.
-3. Implement shooting with the inlet saturation residual. Find a sign bracket for the nonnegative Sb₄ molar flux and solve for the root. Check all three boundary conditions and the physical bounds along the accepted profile.
-4. Check both limiting regimes and numerical convergence of flux and pressure profiles under integration refinement. Compute Sb₄ mass flow from the accepted molar flux, tube area, and molar mass.
-5. Use Clay for computational experiments and plots of transfer rates, pressures, and composition. Compare predictions with reference calculations and available experimental data.
+1. Check solver behavior in both limiting regimes and convergence of flux and pressure profiles under integration refinement. Compute Sb₄ mass flow from the accepted molar flux, tube area, and molar mass.
+2. Use Clay for computational experiments and plots of transfer rates, pressures, and composition. Compare predictions with reference calculations and available experimental data.
 
 ## Deferred
 
