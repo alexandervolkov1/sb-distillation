@@ -199,3 +199,115 @@
                       {:options opts})))
 
     opts))
+
+(defn integrate
+  "Integrate a system of ODEs using adaptive RK4
+  with step doubling and local error control.
+  Supports forward and backward integration.
+  Returns the final state, solution profile,
+  attempt count and integration status."
+  ([f z-start z-end y-start]
+   (integrate f z-start z-end y-start {}))
+
+  ([f z-start z-end y-start options]
+   (when-not (and (ifn? f)
+                  (finite-number? z-start)
+                  (finite-number? z-end)
+                  (vector? y-start)
+                  (seq y-start)
+                  (map? options))
+     (throw (ex-info "Invalid integration arguments"
+                     {:z-start z-start
+                      :z-end z-end
+                      :state y-start})))
+
+   (let [z-start (double z-start)
+         z-end (double z-end)
+         span (Math/abs (- z-end z-start))
+         direction (if (> z-end z-start) 1.0 -1.0)
+         {:keys [abs-tol rel-tol safety
+                 min-factor max-factor max-attempts
+                 initial-step min-step max-step
+                 valid-state?]}
+         (prepare-options span options)]
+
+     (check-state! valid-state? z-start y-start)
+
+     (loop [z z-start
+            y y-start
+            step initial-step
+            attempts 0
+            profile [{:z z-start :state y-start}]]
+
+       (let [result {:z z
+                     :state y
+                     :attempts attempts
+                     :profile profile}]
+
+         (cond
+           (= z z-end)
+           (assoc result :status :success)
+
+           (>= attempts max-attempts)
+           (assoc result
+                  :status :failed
+                  :reason :max-attempts)
+
+           :else
+           (let [remaining (Math/abs (- z-end z))
+                 step (min step remaining)
+                 h (* direction step)
+                 advanced-z (+ z h)
+                 next-z (if (= step remaining)
+                          z-end
+                          advanced-z)]
+
+             (if (= advanced-z z)
+               (assoc result
+                      :status :failed
+                      :reason :coordinate-stagnation)
+
+               (let [{:keys [status state error]
+                      :as trial}
+                     (attempt-step
+                      f z y h valid-state?
+                      abs-tol rel-tol)]
+
+                 (if (= status :accepted)
+                   (let [next-step
+                         (next-step-size
+                          step error safety
+                          min-factor max-factor)]
+
+                     (recur next-z
+                            state
+                            (max min-step
+                                 (min max-step next-step))
+                            (inc attempts)
+                            (conj profile
+                                  {:z next-z
+                                   :state state})))
+
+                   (let [reduced-step
+                         (if (= (:reason trial)
+                                :error-too-large)
+                           (next-step-size
+                            step error safety
+                            min-factor max-factor)
+                           (* 0.5 step))
+
+                         next-step
+                         (max min-step reduced-step)]
+
+                     (if (>= next-step step)
+                       (assoc result
+                              :status :failed
+                              :reason :step-too-small
+                              :attempts (inc attempts)
+                              :last-rejection trial)
+
+                       (recur z
+                              y
+                              next-step
+                              (inc attempts)
+                              profile))))))))))))
