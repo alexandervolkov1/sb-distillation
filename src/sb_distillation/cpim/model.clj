@@ -23,3 +23,12 @@
      :mu2      mu2
      :phi12    (tr/wilke-interaction-factor mu1 mu2 m1 m2)
      :phi21    (tr/wilke-interaction-factor mu2 mu1 m2 m1)}))
+
+(defn effective-diffusivity
+  "D_eff,i - Effective species diffusivity in m^2/s,
+  using Bosanquet's rule.
+  Pressure in Pa, K_12 in Pa*m^2/s, D_{K,i} in m^2/s."
+  [pressure k12 dk]
+  (/ 1.0
+     (+ (/ pressure k12)
+        (/ 1.0 dk))))
