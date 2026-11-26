@@ -81,3 +81,14 @@
      (Math/pow (/ temp h2-reference-temp) 1.5)
      (/ (+ h2-reference-temp h2-sutherland-constant)
         (+ temp h2-sutherland-constant))))
+
+(defn wilke-interaction-factor
+  "Phi_{ij} - Dimensionless Wilke interaction factor.
+  Viscosities in Pa*s, molar masses in kg/mol."
+  [viscosity-i viscosity-j molar-mass-i molar-mass-j]
+  (let [a (+ 1.0
+             (* (Math/sqrt (/ viscosity-i viscosity-j))
+                (Math/pow (/ molar-mass-j molar-mass-i) 0.25)))]
+    (/ (* a a)
+       (Math/sqrt
+        (* 8.0 (+ 1.0 (/ molar-mass-i molar-mass-j)))))))
