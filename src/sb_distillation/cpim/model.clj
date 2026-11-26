@@ -1,6 +1,14 @@
 (ns sb-distillation.cpim.model
   (:require [sb-distillation.cpim.transport :as tr]))
 
+(defn molecular-resistance
+  "A_K - Molecular pressure resistance coefficient
+  in (kg/mol)^0.5/s.
+  RT in J/mol, inner diameter in m."
+  [rt diameter]
+  (* (/ 3.0 diameter)
+     (Math/sqrt (/ (* Math/PI rt) 8.0))))
+
 (defn prepare-coefficients
   "Constant CPIM coefficients for an isothermal circular tube.
   Temperature in K, inner diameter in m.
@@ -8,12 +16,14 @@
   [{:keys [gas-const sb4-molar-mass h2-molar-mass]
     :as params}
    temp diameter]
-  (let [m1 sb4-molar-mass
+  (let [rt (* gas-const temp)
+        m1 sb4-molar-mass
         m2 h2-molar-mass
         mu1 (tr/sb4-viscosity params temp)
         mu2 (tr/h2-viscosity params temp)]
-    {:rt       (* gas-const temp)
+    {:rt       rt
      :diameter diameter
+     :ak       (molecular-resistance rt diameter)
      :sqrt-m1  (Math/sqrt m1)
      :sqrt-m2  (Math/sqrt m2)
      :dk1      (tr/knudsen-diffusivity params temp diameter m1)
