@@ -3,6 +3,7 @@
   (:require [clojure.test :refer [deftest is run-tests]]
             [sb-distillation.cpim.model-test]
             [sb-distillation.cpim.transport-test]
+            [sb-distillation.numerics.ode-test]
             [sb-distillation.reference.legacy :as model]))
 
 (def radius 0.03)
@@ -111,6 +112,7 @@
   [& _]
   (let [{:keys [fail error]} (run-tests 'sb-distillation-test
                                        'sb-distillation.cpim.transport-test
-                                       'sb-distillation.cpim.model-test)]
+                                       'sb-distillation.cpim.model-test
+                                       'sb-distillation.numerics.ode-test)]
     (when (pos? (+ fail error))
       (System/exit 1))))
