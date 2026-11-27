@@ -91,9 +91,14 @@
     (is (close? (* 4.0 (:b0 reference-transport))
                 (:b0 (dgm/prepare-coefficients (assoc shared :diameter 0.024))) 1.0e-20))
     (is (= shared (dissoc prepared :b0))))
-  (doseq [[d invalid?] [[0.0 zero?] [1.0e-200 zero?]
-                        [1.0e200 #(Double/isInfinite %)] [##Inf #(Double/isInfinite %)]
-                        [##NaN #(Double/isNaN %)]]]
+  (is (close? 7.03125e306 (:b0 (dgm/prepare-coefficients {:diameter 1.5e154})) 1.0e292))
+  (doseq [d [nil "0.012" -0.012 -1e-500M 0.0 1e-500M ##Inf ##-Inf ##NaN]]
+    (let [{:keys [parameter value]}
+          (try (dgm/prepare-coefficients {:diameter d})
+               (catch clojure.lang.ExceptionInfo ex (ex-data ex)))]
+      (is (= :diameter parameter) (str "Diameter " d " m"))
+      (is (= (pr-str d) (pr-str value)))))
+  (doseq [[d invalid?] [[1.0e-200 zero?] [1.0e200 #(Double/isInfinite %)]]]
     (let [{:keys [quantity value]}
           (try (dgm/prepare-coefficients {:diameter d})
                (catch clojure.lang.ExceptionInfo ex (ex-data ex)))]

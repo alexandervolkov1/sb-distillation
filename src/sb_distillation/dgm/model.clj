@@ -4,9 +4,16 @@
 
 (defn prepare-coefficients
   "B_0 - Add the viscous permeability in m^2 to the shared tube coefficients.
-  Inner diameter in m."
+  Inner diameter in m, finite and strictly positive in double precision."
   [{:keys [diameter] :as coefficients}]
-  (let [b0 (/ (* diameter diameter) 32.0)]
+  (when-not (and (number? diameter)
+                 (pos? diameter)
+                 (let [d (double diameter)]
+                   (and (pos? d) (Double/isFinite d))))
+    (throw (ex-info "Expected a finite positive DGM inner diameter in meters."
+                    {:parameter :diameter :value diameter})))
+  (let [d (double diameter)
+        b0 (* (/ d 32.0) d)]
     (when-not (and (pos? b0) (Double/isFinite b0))
       (throw (ex-info "Expected finite positive DGM permeability."
                       {:quantity :b0 :value b0})))
