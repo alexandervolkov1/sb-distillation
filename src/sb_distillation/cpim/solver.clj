@@ -3,6 +3,30 @@
    [sb-distillation.cpim.model :as model]
    [sb-distillation.cpim.thermodynamics :as thermo]))
 
+(defn- finite-number?
+  "Return true if x is a finite number
+  representable as a double."
+  [x]
+  (and (number? x)
+       (Double/isFinite (double x))))
+
+(defn valid-pressure-state?
+  "Check physical admissibility of the pressure
+  state [p_1 p_2], with pressures in Pa.
+  Both partial pressures and total pressure
+  must be finite.
+  Requires p_1 >= 0 and p_2 > 0."
+  [state]
+  (and (sequential? state)
+       (= 2 (count state))
+       (let [[p1 p2] state]
+         (and (finite-number? p1)
+              (finite-number? p2)
+              (>= p1 0.0)
+              (> p2 0.0)
+              (Double/isFinite
+               (+ (double p1) (double p2)))))))
+
 (defn cross-sectional-area
   "S - Tube cross-sectional area in m^2.
   Inner diameter in m."
@@ -45,6 +69,48 @@
   [gauge-pressure pressure-drop]
   (+ gauge-pressure pressure-drop))
 
+(defn- validate-conditions!
+  "Validate operating conditions of the CPIM
+  boundary-value problem.
+  All quantities are in SI units."
+  [conditions]
+  (doseq [k [:temp
+             :diameter
+             :length
+             :ref-pressure
+             :ref-temp]]
+    (let [v (get conditions k)]
+      (when-not (and (finite-number? v)
+                     (pos? v))
+        (throw
+         (ex-info "Expected a finite positive parameter."
+                  {:parameter k :value v})))))
+
+  (doseq [k [:ref-volumetric-flow
+             :gauge-pressure
+             :trap-pressure-drop]]
+    (let [v (get conditions k)]
+      (when-not (and (finite-number? v)
+                     (not (neg? v)))
+        (throw
+         (ex-info "Expected a finite nonnegative parameter."
+                  {:parameter k :value v})))))
+
+  (when-not (> (:temp conditions) 152.352)
+    (throw
+     (ex-info "Temperature outside Antoine correlation domain."
+              {:temp (:temp conditions)})))
+
+  (let [p2-out (outlet-hydrogen-pressure
+                (:gauge-pressure conditions)
+                (:trap-pressure-drop conditions))]
+    (when-not (valid-pressure-state? [0.0 p2-out])
+      (throw
+       (ex-info "Invalid outlet pressure state."
+                {:outlet-state [0.0 p2-out]}))))
+
+  conditions)
+
 (defn prepare-problem
   "Prepare constant coefficients and boundary conditions
   for the CPIM boundary-value problem.
@@ -57,7 +123,9 @@
            ref-temp
            ref-volumetric-flow
            gauge-pressure
-           trap-pressure-drop]}]
+           trap-pressure-drop]
+    :as conditions}]
+  (validate-conditions! conditions)
   (let [area (cross-sectional-area diameter)
 
         throughput (hydrogen-throughput
