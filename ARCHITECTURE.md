@@ -1,6 +1,6 @@
 # Project architecture
 
-The mathematical reference for CPIM and DGM is the Typst report at revision `e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6`. The original independent CPIM verification used revision `93c4a9e09dae96427635c2e8130a058c982b6931`. [Current theory][theory] · [Original CPIM theory][cpim-theory] · [CPIM verification study][verification]
+The mathematical reference for binary transport and pure Sb₄ is the Typst report at revision `cd291cd1ee7689b3cff53d99da2017ff9243e3d0`. The original independent CPIM verification used revision `93c4a9e09dae96427635c2e8130a058c982b6931` and the independent DGM verification used revision `e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6`. [Current theory][theory] · [Original CPIM theory][cpim-theory] · [CPIM verification study][verification] · [DGM verification study][dgm-verification]
 
 ## Physical problem
 
@@ -19,6 +19,8 @@ DGM (Dusty Gas Model) combines Knudsen transport, Maxwell–Stefan mutual diffus
 The independent coordinate `z` increases from source (`0`) to receiver (`L`). Two first-order ODEs govern `p_1(z), p_2(z)`, with index 1 for Sb₄ and 2 for H₂, `p = p_1 + p_2`, and `x_i = p_i/p`. The constant tube-frame fluxes `N_i` use mol/(m²·s), positive toward the receiver. Hydrogen flux `N_2` follows from the regulator's reference volumetric flow, pressure and temperature, and tube area `S`. The unknowns are `N_1` and the pressure profiles, including inlet H₂ pressure. [Boundary conditions and unknowns][boundaries]
 
 The inlet imposes `p_1(0) = p_{1,sat}(T_s)`. The outlet has `p_1(L) = 0` and `p_2(L) = p_g + Q_2/C_trap`, using a common throughput convention for `Q_2` and `C_trap`. The shooting method integrates backward from the two known outlet pressures for each trial `N_1 ≥ 0` and seeks a sign-bracketed root of `F(N_1) = p_1(0; N_1) - p_{1,sat}(T_s)`. The implementation checks physical admissibility along the tube and tests the inlet residual against an absolute tolerance. Antimony mass flow is `M_1 N_1 S` in kg/s. The profiles also give total pressure and composition along the tube. [Shooting, checks, and mass flow][numerics]
+
+For pure Sb₄ flowing into vacuum, CPIM and DGM both reduce to a single equation with `p_1(0) = p_{1,sat}(T_s)` and `p_1(L) = 0`. Its exact flux follows by integrating the sum of the Knudsen and pressure-dependent viscous transport terms. A zero H₂ feed with positive residual H₂ pressure remains a binary boundary-value problem. The zero-feed maps use the pure vapor boundary conditions. [Pure-vapor derivation][pure-theory]
 
 The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, and pure-component viscosities are constant along the tube. Sb₄ viscosity uses hard spheres and H₂ viscosity uses Sutherland's correlation. Local pressure sets `D_12` and local composition sets Wilke mixture viscosity. The provisional 0.600 nm Sb₄ collision diameter affects Sb₄ viscosity and binary diffusion through inverse-square factors, with diffusion using the mean collision diameter. Hard-sphere and Sutherland approximations also contribute uncertainty. [Transport coefficients, uncertainties, and SI units][coefficients]
 
@@ -40,6 +42,7 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 - `sb-distillation.physics.common` prepares `RT`, diameter, square roots of molar masses, `D_{K,i}`, `K_12`, pure viscosities, Wilke factors, and `A_K` once per tube setup. Its local calculation uses partial pressures to obtain `p`, mole fractions, mixture viscosity, `1/A_C`, and `A`. Both models obtain `G` from `total-pressure-gradient`. [Shared tube physics][physics]
 - `sb-distillation.cpim.model` computes Bosanquet effective diffusivities and uses them in the CPIM partial-pressure equations. [CPIM model][model]
 - `sb-distillation.dgm.model` adds `B_0` to the shared coefficient map once per DGM solve. Its right-hand side uses the shared local coefficients, binary diffusivity, and total-pressure gradient to compute the DGM partial-pressure derivatives. Both models return `[dp_1/dz dp_2/dz]` in the direction of increasing `z`. [DGM model][dgm-model]
+- `sb-distillation.physics.pure-vapor/molar-flux` implements the closed-form pure Sb₄ solution using the shared Knudsen diffusivity, Sb₄ viscosity, saturation pressure, and permeability. Independent reference values and limit tests check the flux, and tests of both model right-hand sides check the pure-component reduction. [Pure-vapor source][pure-vapor] · [Pure-vapor tests][pure-tests]
 
 ### Numerical core
 
@@ -67,13 +70,19 @@ Bisection coordinates use double precision and can exhaust the available midpoin
 - `sb-distillation.solver/solve` accepts `{:model :cpim}` or `{:model :dgm}` and defaults to CPIM. It selects the right-hand side once and passes it to `solve-with` for all trials. The returned map carries `:model` on success and failure. An unknown identifier raises `ExceptionInfo`. The previous CPIM namespaces retain their entry points and result shapes. The CPIM-specific `solve` rejects a request to select DGM. [Solver source][solver] · [CPIM compatibility API][cpim-solver]
 - Both models use the default RK4 tolerances of `1e-8 Pa` absolute and `1e-6` relative and the absolute shooting tolerance of `1e-3 Pa`, with up to 32 bracketing trials and 64 bisection iterations. A relative shooting tolerance and recovery from a failed trial are deferred. [Verification study][verification]
 
+### Computational experiments and visualization
+
+- `sb-distillation.experiments.time-grid` converts operating inputs to SI and computes the four hydrogen feed conditions. The 41 × 61 grid uses integer indices for degrees Celsius and tenths of a millimeter. It requires 15,006 binary solves and 2,501 analytical flux evaluations. Each analytical result supplies both zero-feed maps. The scalar cache in `target/distillation-maps/` is keyed by the study inputs, solver options, Clojure version, and calculation sources. [Grid source][time-grid]
+- `sb-distillation.visualization.time-maps` builds the eight Vega-Lite maps with one logarithmic time domain. It checks that time decreases along each axis before locating the unique level crossing along a grid row. Crossings are interpolated in log time and the paths terminate at the map boundary. The Clay notebook declares the operating conditions and displays the maps below the apparatus illustrations. [Visualization source][time-maps] · [Clay analysis notebook][notebook] · [Map verification][map-verification]
+
 ### Reference calculations and verification
 
 - Legacy references preserve ampoule geometry, vapor pressures, conductance and Knudsen corrections, viscosity, diffusion, and pure and binary Dusty Gas Model (DGM) rates. Binary DGM uses RK4 and bisection. Some legacy APIs use °C, Torr, or g/h. The early empirical estimate sets receiver pressure by solid-Sb saturation. DGM and CPIM theory use zero outlet Sb₄ pressure. [Legacy code][legacy] · [Legacy units and assumptions][legacy-docs]
-- [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
+- The historical plot helpers prepare a Vega-Lite theme and grid layers and extract contours by interpolating the first crossing in log time. [Legacy plot helpers][plot]
 - Automated tests cover all seven basic transport functions using independent references, scaling laws, and viscosity limits and symmetries. The model tests cover all seven core functions, including coefficient maps, pure-component states, flux linearity, pressure-gradient consistency, and both ODE limits at finite positive pressures. [Transport tests][cpim-tests] · [Model tests][model-tests]
 - Solver and thermodynamics tests cover boundary preparation, both pressure correlations, trial and full profiles against an independent SciPy reference, and numerical failure propagation. The separate verification study compares all 189 operating points against DOP853 and Brent, studies convergence and both limiting regimes, and measures serial JVM performance. [Solver tests][solver-tests] · [Thermodynamics tests][thermodynamics-tests] · [Verification study][verification]
 - DGM mathematical tests cover independent species and total gradients, the CPIM–DGM gradient difference, and both transport limits. Solver tests cover the baseline SciPy reference, model selection, failure diagnostics, and reuse of the same prepared problem. The independent numerical study compares each model against SciPy on 189 operating points and checks physical admissibility and boundary conditions on a 7503-point grid per model. [DGM model tests][dgm-tests] · [Solver tests][selection-tests] · [DGM verification study][dgm-verification]
+- The dense-grid comparison quantifies the effect of model choice on mass flow and distillation time under the same conditions. A separate map check compares all displayed binary scalar results with the original dense-grid calculations and refines selected contours. [Model comparison][comparison] · [Map verification][map-verification]
 - Legacy tests cover geometry, saturation pressures, and four historical transport outputs. The liquid-Sb test at 700 °C checks the correlation below its 1058–1373 K Antoine fit interval. [Legacy tests][tests] · [NIST fit data][nist]
 
 Run from the project root using the aliases in [deps.edn](deps.edn).
@@ -85,20 +94,26 @@ clojure -M:clay -r notebooks/sb_distillation/analysis.clj
 
 Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](clay.edn)
 
-[theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ
+[theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ
 [cpim-theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/93c4a9e09dae96427635c2e8130a058c982b6931/main.typ
-[assumptions]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L32-L88
-[boundaries]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L103-L208
-[limits]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L210-L554
-[interpolation]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L556-L752
-[numerics]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L754-L937
-[coefficients]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L940-L1154
-[dgm-theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L1156-L1364
+[assumptions]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L32-L88
+[boundaries]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L103-L208
+[limits]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L210-L554
+[interpolation]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L556-L752
+[numerics]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L754-L937
+[coefficients]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L940-L1154
+[dgm-theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L1156-L1364
+[pure-theory]: https://github.com/alexandervolkov1/sb-distillation-theory/blob/cd291cd1ee7689b3cff53d99da2017ff9243e3d0/main.typ#L1366-L1399
 [young-todd]: https://www.sciencedirect.com/science/article/pii/S0017931005004904
 [transport]: src/sb_distillation/physics/transport.clj
 [physics]: src/sb_distillation/physics/common.clj
 [model]: src/sb_distillation/cpim/model.clj
 [dgm-model]: src/sb_distillation/dgm/model.clj
+[pure-vapor]: src/sb_distillation/physics/pure_vapor.clj
+[pure-tests]: test/sb_distillation/physics/pure_vapor_test.clj
+[time-grid]: src/sb_distillation/experiments/time_grid.clj
+[time-maps]: src/sb_distillation/visualization/time_maps.clj
+[map-verification]: scripts/time-maps/README.md
 [solver]: src/sb_distillation/solver.clj
 [cpim-solver]: src/sb_distillation/cpim/solver.clj
 [thermodynamics]: src/sb_distillation/physics/thermodynamics.clj
@@ -116,6 +131,7 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [thermodynamics-tests]: test/sb_distillation/cpim/thermodynamics_test.clj
 [verification]: scripts/cpim-verification/README.md
 [dgm-verification]: scripts/cpim-verification/DGM.md
+[comparison]: scripts/cpim-verification/COMPARISON.md
 [ode-tests]: test/sb_distillation/numerics/ode_test.clj
 [root-tests]: test/sb_distillation/numerics/root_test.clj
 [tests]: test/sb_distillation_test.clj
