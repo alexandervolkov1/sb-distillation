@@ -1,4 +1,7 @@
-(ns sb-distillation.cpim.solver)
+(ns sb-distillation.cpim.solver
+  (:require
+   [sb-distillation.cpim.model :as model]
+   [sb-distillation.cpim.thermodynamics :as thermo]))
 
 (defn cross-sectional-area
   "S - Tube cross-sectional area in m^2.
@@ -41,3 +44,47 @@
   Gauge pressure and trap pressure drop in Pa."
   [gauge-pressure pressure-drop]
   (+ gauge-pressure pressure-drop))
+
+(defn prepare-problem
+  "Prepare constant coefficients and boundary conditions
+  for the CPIM boundary-value problem.
+  All input and output quantities are in SI units."
+  [params
+   {:keys [temp
+           diameter
+           length
+           ref-pressure
+           ref-temp
+           ref-volumetric-flow
+           gauge-pressure
+           trap-pressure-drop]}]
+  (let [area (cross-sectional-area diameter)
+
+        throughput (hydrogen-throughput
+                    ref-pressure
+                    ref-volumetric-flow)
+
+        molar-flow (hydrogen-molar-flow
+                    params throughput ref-temp)
+
+        n2 (hydrogen-molar-flux molar-flow diameter)
+
+        p1-in (thermo/sb-liquid-vapor-pressure temp)
+
+        p2-out (outlet-hydrogen-pressure
+                gauge-pressure trap-pressure-drop)
+
+        coefficients (model/prepare-coefficients
+                      params temp diameter)]
+
+    {:temp                temp
+     :diameter            diameter
+     :length              length
+     :area                area
+     :sb4-molar-mass       (:sb4-molar-mass params)
+     :hydrogen-throughput throughput
+     :hydrogen-molar-flow molar-flow
+     :n2                  n2
+     :p1-in               p1-in
+     :outlet-state        [0.0 p2-out]
+     :coefficients        coefficients}))
