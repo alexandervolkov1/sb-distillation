@@ -2,7 +2,8 @@
   (:require
    [sb-distillation.cpim.model :as model]
    [sb-distillation.cpim.thermodynamics :as thermo]
-   [sb-distillation.numerics.ode :as ode]))
+   [sb-distillation.numerics.ode :as ode]
+   [sb-distillation.numerics.root :as root]))
 
 (defn- finite-number?
   "Return true if x is a finite number
@@ -302,3 +303,94 @@
            (recur upper
                   (* 2.0 upper-n1)
                   trials)))))))
+
+(def default-solver-options
+  {:residual-tol      1.0e-3
+   :max-bracket-trials 32
+   :max-iterations    64
+   :ode-options       {}})
+
+(defn solve
+  "Solve the CPIM boundary-value problem by shooting.
+  Returns the Sb4 molar flux N_1 in mol/(m^2*s),
+  the pressure profile in Pa, and solver diagnostics.
+  Residual tolerance in Pa."
+  ([problem]
+   (solve problem {}))
+
+  ([problem options]
+   (let [{:keys [residual-tol
+                 max-bracket-trials
+                 max-iterations
+                 ode-options]}
+         (merge default-solver-options options)]
+
+     (when-not (and (finite-number? residual-tol)
+                    (pos? residual-tol)
+                    (integer? max-iterations)
+                    (pos? max-iterations))
+       (throw
+        (ex-info "Invalid shooting solver options."
+                 {:options options})))
+
+     (let [{:keys [status
+                   bracket
+                   lower-trial
+                   upper-trial
+                   trials]
+            :as bracket-result}
+           (find-shooting-bracket
+            problem ode-options max-bracket-trials)]
+
+       (if (not= status :success)
+
+         (assoc bracket-result :stage :bracketing)
+
+         (let [[a b] bracket
+
+               cache (volatile!
+                      {(double a) lower-trial
+                       (double b) upper-trial})
+
+               residual-fn
+               (fn [n1]
+                 (let [trial
+                       (or (get @cache n1)
+                           (let [result
+                                 (evaluate-trial
+                                  problem n1 ode-options)]
+                             (vswap! cache assoc n1 result)
+                             result))]
+
+                   (if (and (= :success (:status trial))
+                            (finite-number? (:residual trial)))
+                     (:residual trial)
+                     ##NaN)))
+
+               root-result
+               (root/bisect
+                residual-fn a b
+                residual-tol max-iterations)
+
+               trial (get @cache (:x root-result))]
+
+           (if (= :success (:status root-result))
+
+             (assoc trial
+                    :root-result root-result
+                    :bracket-trials trials)
+
+             {:status :failed
+              :stage :shooting
+              :reason (cond
+                        (not= :success (:status trial))
+                        :integration-failed
+
+                        (not (finite-number? (:residual trial)))
+                        :non-finite-residual
+
+                        :else
+                        (:reason root-result))
+              :trial trial
+              :root-result root-result
+              :bracket-trials trials})))))))
