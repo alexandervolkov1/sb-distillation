@@ -42,8 +42,13 @@
 
 (defn solve
   "Solve the CPIM boundary-value problem by shooting.
+  Use sb-distillation.solver/solve to select another model.
   N_1 in mol/(m^2*s), pressures and residual tolerance in Pa."
   ([problem]
    (solver/solve-with model/pressure-derivatives problem))
   ([problem options]
-   (solver/solve-with model/pressure-derivatives problem options)))
+   (let [selected-model (get options :model :cpim)]
+     (when-not (= :cpim selected-model)
+       (throw (ex-info "Use sb-distillation.solver/solve to select a model other than CPIM."
+                       {:model selected-model :supported-models [:cpim]})))
+     (solver/solve-with model/pressure-derivatives problem options))))

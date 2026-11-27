@@ -7,7 +7,8 @@
             [sb-distillation.cpim.transport-test]
             [sb-distillation.numerics.ode-test]
             [sb-distillation.numerics.root-test]
-            [sb-distillation.reference.legacy :as model]))
+            [sb-distillation.reference.legacy :as model]
+            [sb-distillation.solver-test]))
 
 (def radius 0.03)
 (def straight-length 0.18)
@@ -118,6 +119,7 @@
                                        'sb-distillation.cpim.model-test
                                        'sb-distillation.cpim.solver-test
                                        'sb-distillation.cpim.thermodynamics-test
+                                       'sb-distillation.solver-test
                                        'sb-distillation.numerics.ode-test
                                        'sb-distillation.numerics.root-test)]
     (when (pos? (+ fail error))

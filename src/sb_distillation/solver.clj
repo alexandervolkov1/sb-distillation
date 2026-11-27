@@ -1,5 +1,7 @@
 (ns sb-distillation.solver
   (:require
+   [sb-distillation.cpim.model :as cpim]
+   [sb-distillation.dgm.model :as dgm]
    [sb-distillation.numerics.ode :as ode]
    [sb-distillation.numerics.root :as root]
    [sb-distillation.physics.common :as physics]
@@ -403,6 +405,25 @@
               :trial trial
               :root-result root-result
               :bracket-trials trials})))))))
+
+(defn solve
+  "Solve the tube boundary-value problem by shooting.
+  Select :cpim (the default) or :dgm via :model in options.
+  Return the selected model with the result and diagnostics.
+  N_1 in mol/(m^2*s), pressures and residual tolerance in Pa."
+  ([problem]
+   (solve problem {}))
+  ([problem options]
+   (let [model (get options :model :cpim)
+         [pressure-derivatives problem]
+         (case model
+           :cpim [cpim/pressure-derivatives problem]
+           :dgm [dgm/pressure-derivatives
+                 (update problem :coefficients dgm/prepare-coefficients)]
+           (throw (ex-info "Unknown tube transport model."
+                           {:model model :supported-models [:cpim :dgm]})))]
+     (assoc (solve-with pressure-derivatives problem (dissoc options :model))
+            :model model))))
 
 (defn distillation-time
   "t - Distillation time in seconds.

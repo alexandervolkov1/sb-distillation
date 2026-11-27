@@ -4,19 +4,23 @@
 
 - The CPIM mathematical core is complete and tested. It assembles constant and local coefficients and evaluates both partial-pressure ODE right-hand sides. The seven core functions and seven basic transport functions agree with the pinned report. [Implemented functions](ARCHITECTURE.md#software-architecture)
 - The generic numerical core is complete and tested. It provides adaptive RK4 with step doubling and normalized local error control, plus bracketed bisection with exact residual comparisons across numeric types. Tests cover analytical solutions, RK4 convergence, failure diagnostics, and floating-point boundary cases. [Numerical core](ARCHITECTURE.md#numerical-core)
-- The physical solver is implemented and numerically verified over the provisional 680–720 °C, 6–12 mm, 100–300 ml/h operating range. All 189 reference-grid cases passed the boundary and pressure checks. The full boundary-value solution approaches both transport limits in synthetic cases. [Verification study](scripts/cpim-verification/README.md)
+- CPIM is numerically verified over the provisional 680–720 °C, 6–12 mm, 100–300 ml/h operating range. All 189 reference-grid cases passed the boundary and pressure checks. The full CPIM boundary-value solution approaches both transport limits in synthetic cases. [Verification study](scripts/cpim-verification/README.md)
 - The physical solver validates required inputs before calculation and checks derived values for positivity and finite double representation. Regressions cover conversion and calculation overflow and underflow, mixed numeric types, and zero flow. The 189-point reference comparison and 7503-point dense grid passed after the validation fixes. [Input contract](ARCHITECTURE.md#physical-solver) · [Solver tests](test/sb_distillation/cpim/solver_test.clj)
+- CPIM and DGM share transport, thermodynamics, the total-pressure gradient, boundary preparation, and the shooting solver. CPIM remains the default. The DGM implementation follows theory revision `e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6` and passes the baseline solve and model selection checks. The original independent CPIM verification used revision `93c4a9e09dae96427635c2e8130a058c982b6931`. [Accepted theory](https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L1156-L1364) · [Model selection tests](test/sb_distillation/solver_test.clj) · [CPIM verification study](scripts/cpim-verification/README.md)
 - Preliminary level maps will use the current defaults of `1e-8 Pa` absolute and `1e-6` relative for RK4 and `1e-3 Pa` absolute for the shooting residual. [Convergence and tolerances](scripts/cpim-verification/README.md#convergence-and-tolerances)
 
 ## Next steps
 
-1. Use Clay for preliminary level maps with the accepted solver tolerances.
-2. Compare predictions with measured transfer rates and uncertainty estimates when suitable data become available.
+1. Test the DGM equations against independent mathematical references, including both transport limits and the relation between the CPIM and DGM pressure derivatives.
+2. Verify DGM with an independent numerical solver. Run both models over the common operating grids and compare convergence and performance.
+3. Quantify the model differences in mass flow and distillation time over the operating range.
 
 ## Deferred
 
 - Model spatial deposition inside the receiving ampoule after the tube model is established. Define receiver geometry, thermal conditions, and the deposition model with the user.
 - Revisit a relative shooting tolerance and recovery from failed upper trials if future operating ranges require them.
+- Use Clay for preliminary level maps after the model comparison.
+- Compare predictions with measured transfer rates and uncertainty estimates when suitable data become available.
 
 ## Open decisions
 
