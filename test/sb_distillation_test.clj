@@ -2,6 +2,8 @@
 (ns sb-distillation-test
   (:require [clojure.test :refer [deftest is run-tests]]
             [sb-distillation.cpim.model-test]
+            [sb-distillation.cpim.solver-test]
+            [sb-distillation.cpim.thermodynamics-test]
             [sb-distillation.cpim.transport-test]
             [sb-distillation.numerics.ode-test]
             [sb-distillation.numerics.root-test]
@@ -110,11 +112,18 @@
       (is (< (Math/abs (- (/ actual expected) 1.0)) 1.0e-10) description))))
 
 (defn -main
-  [& _]
-  (let [{:keys [fail error]} (run-tests 'sb-distillation-test
-                                       'sb-distillation.cpim.transport-test
-                                       'sb-distillation.cpim.model-test
-                                       'sb-distillation.numerics.ode-test
-                                       'sb-distillation.numerics.root-test)]
+  [& args]
+  (let [namespaces (if (= ["--known-defects"] (vec args))
+                     (let [defects 'sb-distillation.cpim.solver-known-defects-test]
+                       (require defects)
+                       [defects])
+                     '[sb-distillation-test
+                       sb-distillation.cpim.transport-test
+                       sb-distillation.cpim.model-test
+                       sb-distillation.cpim.solver-test
+                       sb-distillation.cpim.thermodynamics-test
+                       sb-distillation.numerics.ode-test
+                       sb-distillation.numerics.root-test])
+        {:keys [fail error]} (apply run-tests namespaces)]
     (when (pos? (+ fail error))
       (System/exit 1))))
