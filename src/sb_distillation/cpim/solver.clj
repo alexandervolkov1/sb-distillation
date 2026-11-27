@@ -1,7 +1,8 @@
 (ns sb-distillation.cpim.solver
   (:require
    [sb-distillation.cpim.model :as model]
-   [sb-distillation.cpim.thermodynamics :as thermo]))
+   [sb-distillation.cpim.thermodynamics :as thermo]
+   [sb-distillation.numerics.ode :as ode]))
 
 (defn- finite-number?
   "Return true if x is a finite number
@@ -156,3 +157,37 @@
      :p1-in               p1-in
      :outlet-state        [0.0 p2-out]
      :coefficients        coefficients}))
+
+(defn integrate-trial
+  "Integrate a trial CPIM pressure profile
+  backward from z = L to z = 0.
+  N_1 is the trial Sb4 molar flux in mol/(m^2*s).
+  Coordinates in m, pressures in Pa."
+  ([problem n1]
+   (integrate-trial problem n1 {}))
+
+  ([{:keys [length
+            coefficients
+            n2
+            outlet-state]}
+    n1 options]
+
+   (when-not (and (finite-number? n1)
+                  (>= n1 0.0))
+     (throw
+      (ex-info "Invalid trial Sb4 molar flux."
+               {:n1 n1})))
+
+   (let [rhs (fn [_z [p1 p2]]
+               (model/pressure-derivatives
+                coefficients p1 p2 n1 n2))]
+
+     (assoc
+      (ode/integrate
+       rhs
+       length
+       0.0
+       outlet-state
+       (assoc options
+              :valid-state? valid-pressure-state?))
+      :n1 n1))))
