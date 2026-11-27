@@ -5,6 +5,7 @@
             [sb-distillation.cpim.solver-test]
             [sb-distillation.cpim.thermodynamics-test]
             [sb-distillation.cpim.transport-test]
+            [sb-distillation.dgm.model-test]
             [sb-distillation.numerics.ode-test]
             [sb-distillation.numerics.root-test]
             [sb-distillation.reference.legacy :as model]
@@ -119,6 +120,7 @@
                                        'sb-distillation.cpim.model-test
                                        'sb-distillation.cpim.solver-test
                                        'sb-distillation.cpim.thermodynamics-test
+                                       'sb-distillation.dgm.model-test
                                        'sb-distillation.solver-test
                                        'sb-distillation.numerics.ode-test
                                        'sb-distillation.numerics.root-test)]

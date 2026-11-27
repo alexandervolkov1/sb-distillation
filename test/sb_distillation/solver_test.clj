@@ -51,3 +51,16 @@
                ((juxt :status :stage :reason :model) result)))))
     (is (= (cpim/solve problem options)
            (dissoc (solver/solve problem options) :model)))))
+
+(deftest sequential-model-solves-preserve-prepared-problem-test
+  (let [problem (baseline)
+        original (baseline)
+        results (atom {})]
+    (doseq [model [:cpim :dgm :cpim :dgm]
+            :let [result (solver/solve problem {:model model})]]
+      (is (= [:success model] ((juxt :status :model) result)))
+      (is (= original problem))
+      (is (not (contains? (:coefficients problem) :b0)))
+      (if-let [previous (get @results model)]
+        (is (= previous result))
+        (swap! results assoc model result)))))
