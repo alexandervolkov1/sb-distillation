@@ -17,7 +17,7 @@ python scripts/cpim-verification/reference.py --pressures target/cpim-verificati
 clojure -M:test
 ```
 
-Omit `--full-grid` for the 189-point study and timing sample. `clojure -M:test --known-defects` runs three expected-behavior tests with 12 assertions. On the current solver they report seven assertion failures and five unexpected exception types. [Defect tests](../../test/sb_distillation/cpim/solver_known_defects_test.clj)
+Omit `--full-grid` for the 189-point study and timing sample. The validation regressions now run with `clojure -M:test`. [Solver tests](../../test/sb_distillation/cpim/solver_test.clj)
 
 ## Baseline at 700 °C, 10 mm, 200 ml/h
 
@@ -102,7 +102,7 @@ The next sweep solves for flux at each setting. The middle five rows hold RK4 at
 | Tight RK4 | 1e-9 | 1.27e-10 | 5.52e-9 | 1.50e-8 / 1.52e-8 |
 | Candidate RK4 (1e-9 Pa, 1e-7) | 1e-4 | 1.49e-6 | 8.71e-6 | 7.25e-5 / 9.06e-6 |
 
-The default shooting tolerance dominates the transfer-rate error. Defaults are adequate for preliminary mass-flow or time maps if a numerical relative error of about `3e-5` is acceptable. For finer comparisons, start with `1e-9 Pa` absolute, `1e-7` relative, and `1e-4 Pa` shooting tolerance. Verify that candidate across the map grid if a specific error budget is required. The candidate was measured at the three convergence points.
+The default shooting tolerance dominates the transfer-rate error. The accepted settings for preliminary mass-flow and time maps are the current defaults of `1e-8 Pa` absolute and `1e-6` relative for RK4 and `1e-3 Pa` absolute for shooting. These defaults yielded a maximum relative mass-flow error of about `3e-5` on the reference grid. The tighter candidate in the table was tested at the three convergence points.
 
 ## Limiting regimes
 
@@ -110,13 +110,13 @@ The molecular comparison uses the analytic linear partial-pressure profiles and 
 
 The continuum comparison removes Knudsen diffusion resistance and molecular pressure conductance from the independent equations. The tube diameter stays 10 mm and the feed stays 200 ml/h. At outlet pressures of 100, 1000, and 10000 Pa the relative flux difference decreases from `5.26e-2` to `2.69e-2` to `2.78e-3`. Maximum pressure differences decrease from `4.22 / 9.76 Pa` to `0.00434 / 0.00446 Pa`. Across both series Clojure agrees with the full CPIM reference within `3.15e-9` relative in flux and `1.43e-6 Pa` in common-station profiles. These are synthetic limit tests of the full boundary-value problem.
 
-## Open defects
+## Findings from the initial verification
 
-The following examples use the baseline conditions unless overridden. All require changed production behavior and have expected-behavior assertions in the optional suite.
+The table records behavior at the initial verification commit `ff2b67dc5727b008129a9e055986f67988b37023`. The examples use the baseline conditions unless overridden. The original optional defect suite had seven assertion failures and five unexpected exception types. The validation follow-up addresses each case and moves the regressions into the standard suite.
 
 | Reproduction | Observed behavior | Proposed fix |
 | --- | --- | --- |
-| Set `:sb4-collision-diameter` to `-0.600e-9` | Preparation succeeds and changes `K_12` from about 20.42 to 166.88 Pa·m²/s | Validate transport parameters before arithmetic, with field-specific errors and positive domains for masses, diameters, constants and reference quantities. Define the Sutherland parameter domain with the model owner. |
+| Set `:sb4-collision-diameter` to `-0.600e-9` | Preparation succeeds and changes `K_12` from about 20.42 to 166.88 Pa·m²/s | Validate transport parameters before arithmetic, with field-specific errors and positive domains for masses, diameters, constants and reference quantities. Allow a nonnegative Sutherland constant. |
 | Set `:h2-reference-viscosity` to NaN or infinity | Preparation returns nonfinite viscosity and Wilke coefficients | Validate the supplied constants and require finite positive derived coefficients. |
 | Set `:gas-const` to zero, omit it, or pass a string | A raw arithmetic, null-pointer, or class-cast exception escapes | Reject the input with `ExceptionInfo` identifying the parameter and value. |
 | Set `:diameter` to `1e200` or `1e-200` m | The area overflows to infinity and the H₂ flux becomes zero, or area underflow causes a raw division exception | Validate representable positive area before dividing. |
@@ -125,13 +125,19 @@ The following examples use the baseline conditions unless overridden. All requir
 | Pass `Long/MAX_VALUE` for both gauge and trap pressures | Checked integer addition throws an arithmetic exception despite a finite double sum | Define the numerical type contract at the SI boundary. Normalize supported numbers before arithmetic and check the result. |
 | Call `(valid-pressure-state? [-1e-500M 1.0])` | A negative decimal passes the sign check after rounding to negative zero | Check the original signs with type-aware predicates before verifying representability and the summed pressure. |
 
-The physical-constant defects can occur at ordinary operating conditions with invalid caller-supplied parameters. The overflow, underflow, and mixed-type cases are outside the tested operating domain. All working-range cases used the default transport parameters. The current absolute shooting criterion differs from the report's absolute-plus-relative form. The provisional gauge convention, trap calibration, saturation extrapolation, and effective collision diameter remain scientific uncertainties.
+The physical-constant defects could occur at ordinary operating conditions with invalid caller-supplied parameters. The overflow, underflow, and mixed-type cases were outside the tested operating domain. All working-range cases used the default transport parameters. The provisional gauge convention, trap calibration, saturation extrapolation, and effective collision diameter remain scientific uncertainties.
 
-No physically invalid doubling trial occurred on the 189-point reference grid. If a future sweep finds one, a candidate recovery is to reduce the trial increment between the last admissible negative residual and the failed flux. Retain only successful trials as bracket endpoints and report the failed integration separately. Agree on the recovery rule and its stopping conditions before changing the algorithm.
+No physically invalid doubling trial occurred on the 189-point reference grid. Recovery from a failed doubling trial and the report's relative shooting criterion are deferred. A candidate recovery for future study is to reduce the trial increment between the last admissible negative residual and the failed flux, keeping only successful trials as bracket endpoints.
+
+## Validation follow-up
+
+`prepare-problem` checks signs before conversion and accepts finite doubles that preserve whether an input is zero. It validates the derived area, reference thermal energy, pressures, hydrogen flow quantities, and transport coefficients. Zero hydrogen feed stays zero, and a positive feed that rounds to zero at any flow conversion is rejected. Gauge and trap pressures are converted before addition. Input errors identify the parameter and calculation errors identify the quantity. [Input contract](../../ARCHITECTURE.md#physical-solver)
+
+`clojure -M:test` passed 83 tests and 1635 assertions. All 189 reference-grid solutions passed. The numerical summary matched the initial verification, including the maximum relative mass-flow error of `2.886e-5` and maximum station pressure errors of `9.984e-4 Pa` for Sb₄ and `1.099e-4 Pa` for H₂. The convergence CSV matched byte for byte. All 7503 dense-grid solutions passed the profile and boundary checks. The measured serial solve time was 126.11 s, with a mean of 16.81 ms per call.
 
 ## Performance
 
-The study warmed the JVM with five serial passes over the 189-point grid. It timed only `solve` with counters around trial evaluations. The run used Windows, Temurin 25.0.4.1, and an AMD Ryzen 5 6600H. The full 7503-point grid was timed serially with default tolerances and no contour computation. Each solve owns its cache. The retained profile state count includes the final bracket endpoints and all subsequent midpoint profiles. Earlier negative trials are replaced during bracketing.
+The initial study warmed the JVM with five serial passes over the 189-point grid. It timed only `solve` with counters around trial evaluations. The run used Windows, Temurin 25.0.4.1, and an AMD Ryzen 5 6600H. The full 7503-point grid was timed serially with default tolerances and no contour computation. Each solve owns its cache. The retained profile state count includes the final bracket endpoints and all subsequent midpoint profiles. Earlier negative trials are replaced during bracketing.
 
 | Grid | Successful calls | Mean solve, ms | Max solve, ms | Mean / max integrations | Mean / max RK4 attempts | Max cached states | Serial solve time, s |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |

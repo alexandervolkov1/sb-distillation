@@ -9,30 +9,43 @@
   (* (/ 3.0 diameter)
      (Math/sqrt (/ (* Math/PI rt) 8.0))))
 
+(defn- checked-coefficient [quantity compute]
+  (let [value (try
+                (compute)
+                (catch ArithmeticException cause
+                  (throw (ex-info (str "Cannot compute CPIM coefficient " (name quantity) ".")
+                                  {:quantity quantity} cause))))
+        x (double value)]
+    (when-not (and (pos? x) (Double/isFinite x))
+      (throw (ex-info (str "Expected a finite positive CPIM coefficient " (name quantity) ".")
+                      {:quantity quantity :value value})))
+    value))
+
 (defn prepare-coefficients
   "Constant CPIM coefficients for an isothermal circular tube.
   Temperature in K, inner diameter in m.
-  All returned quantities are in SI units."
+  All returned quantities are in SI units.
+  Throws if a computed coefficient is outside the positive finite double range."
   [{:keys [gas-const sb4-molar-mass h2-molar-mass]
     :as params}
    temp diameter]
-  (let [rt (* gas-const temp)
+  (let [rt (checked-coefficient :rt #(* gas-const temp))
         m1 sb4-molar-mass
         m2 h2-molar-mass
-        mu1 (tr/sb4-viscosity params temp)
-        mu2 (tr/h2-viscosity params temp)]
+        mu1 (checked-coefficient :mu1 #(tr/sb4-viscosity params temp))
+        mu2 (checked-coefficient :mu2 #(tr/h2-viscosity params temp))]
     {:rt       rt
      :diameter diameter
-     :ak       (molecular-resistance rt diameter)
-     :sqrt-m1  (Math/sqrt m1)
-     :sqrt-m2  (Math/sqrt m2)
-     :dk1      (tr/knudsen-diffusivity params temp diameter m1)
-     :dk2      (tr/knudsen-diffusivity params temp diameter m2)
-     :k12      (tr/binary-diffusivity-factor params temp)
+     :ak       (checked-coefficient :ak #(molecular-resistance rt diameter))
+     :sqrt-m1  (checked-coefficient :sqrt-m1 #(Math/sqrt m1))
+     :sqrt-m2  (checked-coefficient :sqrt-m2 #(Math/sqrt m2))
+     :dk1      (checked-coefficient :dk1 #(tr/knudsen-diffusivity params temp diameter m1))
+     :dk2      (checked-coefficient :dk2 #(tr/knudsen-diffusivity params temp diameter m2))
+     :k12      (checked-coefficient :k12 #(tr/binary-diffusivity-factor params temp))
      :mu1      mu1
      :mu2      mu2
-     :phi12    (tr/wilke-interaction-factor mu1 mu2 m1 m2)
-     :phi21    (tr/wilke-interaction-factor mu2 mu1 m2 m1)}))
+     :phi12    (checked-coefficient :phi12 #(tr/wilke-interaction-factor mu1 mu2 m1 m2))
+     :phi21    (checked-coefficient :phi21 #(tr/wilke-interaction-factor mu2 mu1 m2 m1))}))
 
 (defn effective-diffusivity
   "D_eff,i - Effective species diffusivity in m^2/s,

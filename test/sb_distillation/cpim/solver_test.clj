@@ -54,7 +54,7 @@
   (is (== 0.0 (solver/distillation-time 0.0 0.005)))
   (is (== 0.0 (solver/distillation-time 0.0 0.0)))
   (is (== ##Inf (solver/distillation-time 0.5 0.0)))
-  (doseq [invalid [-1.0 nil "1" ##NaN ##Inf ##-Inf]
+  (doseq [invalid [-1.0 nil "1" ##NaN ##Inf ##-Inf -1e-500M 1e-500M]
           [mass flow] [[invalid 1.0] [1.0 invalid]]]
     (is (= {:mass mass :mass-flow flow}
            (ex-data-from #(solver/distillation-time mass flow))))))
@@ -65,7 +65,8 @@
     (is (solver/valid-pressure-state? valid) (pr-str valid)))
   (doseq [invalid [nil 1 {} [] [1] [1 2 3] [nil 3] [0 "1"] [-1 1] [1 -1] [1 0] [0 0]
                    [##NaN 1] [0 ##NaN] [##Inf 1] [0 ##Inf] [##-Inf 1] [0 ##-Inf]
-                   [1e309M 1] [Double/MAX_VALUE Double/MAX_VALUE]]]
+                   [1e309M 1] [-1e-500M 1.0] [1e-500M 1.0] [0.0 1e-500M]
+                   [Double/MAX_VALUE Double/MAX_VALUE]]]
     (is (not (solver/valid-pressure-state? invalid)) (pr-str invalid))))
 
 (deftest prepared-boundary-data-test
@@ -108,18 +109,85 @@
     (doseq [key (keys conditions)]
       (testing (name key)
         (is (= {:parameter key :value nil} (ex-data-from #(prepare (dissoc conditions key)))))
-        (doseq [value [nil "1" [] -1.0 ##NaN ##Inf ##-Inf 1e309M]]
+        (doseq [value [nil "1" [] -1.0 ##NaN ##Inf ##-Inf 1e309M -1e-500M 1e-500M]]
           (is (= key (:parameter (ex-data-from #(prepare (assoc conditions key value)))))))))
     (doseq [key [:temp :diameter :length :ref-temp :ref-pressure]]
       (is (= {:parameter key :value 0.0}
              (ex-data-from #(prepare (assoc conditions key 0.0))))))
-    (doseq [temp [100.0 152.352]]
-      (is (= {:temp temp} (ex-data-from #(prepare (assoc conditions :temp temp))))))
-    (is (= {:outlet-state [0.0 0.0]}
+    (doseq [temp [100.0 152.352 152.352000000000000000001M]]
+      (is (= {:parameter :temp :value temp}
+             (ex-data-from #(prepare (assoc conditions :temp temp))))))
+    (is (= {:quantity :p2-out :value 0.0}
            (ex-data-from #(prepare (assoc conditions :gauge-pressure 0.0)))))
-    (is (= {:outlet-state [0.0 ##Inf]}
+    (is (= {:quantity :p2-out :value ##Inf}
            (ex-data-from #(prepare (assoc conditions :gauge-pressure Double/MAX_VALUE
                                                     :trap-pressure-drop Double/MAX_VALUE)))))))
+
+(deftest invalid-transport-parameters-test
+  (let [params transport/default-parameters]
+    (doseq [key (keys params)
+            value (cond-> [nil "1" -1.0 ##NaN ##Inf ##-Inf 1e309M -1e-500M 1e-500M]
+                    (not= key :h2-sutherland-constant) (conj 0.0))]
+      (is (= key (:parameter (ex-data-from #(solver/prepare-problem (assoc params key value)
+                                                                    conditions))))
+          (str key " = " (pr-str value))))
+    (is (= {:parameter :gas-const :value nil}
+           (ex-data-from #(solver/prepare-problem (dissoc params :gas-const) conditions))))
+    (is (= {:parameter :sb4-collision-diameter :value -0.600e-9}
+           (ex-data-from #(solver/prepare-problem (assoc params :sb4-collision-diameter -0.600e-9)
+                                                  conditions))))))
+
+(deftest mixed-numeric-inputs-test
+  (let [params (assoc transport/default-parameters
+                      :gas-const 8.314462618M :avogadro-const 602214076000000000000000N
+                      :sb4-molar-mass 6088/12500 :h2-sutherland-constant 0)
+        values (assoc conditions :temp 973.15M :diameter 1/100 :length 1/2
+                      :ref-pressure 101325 :ref-volumetric-flow 1/18000000
+                      :gauge-pressure 4N :trap-pressure-drop (float 0.5))
+        double-values #(update-vals % double)
+        mixed (solver/prepare-problem params values)]
+    (is (= (solver/prepare-problem (double-values params) (double-values values)) mixed))
+    (is (= [0.0 4.5] (:outlet-state mixed)))
+    (is (every? double? (vals (:coefficients mixed))))
+    (is (every? double? (vals (dissoc mixed :coefficients :outlet-state))))
+    (is (near? (* (:h2-reference-viscosity params)
+                  (Math/sqrt (/ 973.15 (:h2-reference-temp params))))
+               (get-in mixed [:coefficients :mu2]) 1e-19)))
+  (testing "An outlet pressure sum can exceed the signed integer range"
+    (let [values (assoc conditions :gauge-pressure Long/MAX_VALUE
+                        :trap-pressure-drop Long/MAX_VALUE)]
+      (is (= [0.0 (* 2.0 Long/MAX_VALUE)]
+             (:outlet-state (solver/prepare-problem transport/default-parameters values))))))
+  (testing "A representable subnormal feed can retain a positive flow"
+    (let [problem (solver/prepare-problem transport/default-parameters
+                                          (assoc conditions :ref-volumetric-flow Double/MIN_VALUE))]
+      (is (every? pos? (map problem [:hydrogen-throughput :hydrogen-molar-flow :n2]))))))
+
+(deftest unrepresentable-prepared-quantities-test
+  (doseq [[quantity parameter-overrides condition-overrides]
+          [[:area {} {:diameter 1e200}]
+           [:area {} {:diameter 1e-200}]
+           [:p1-in {} {:temp 153.0}]
+           [:rt-ref {} {:ref-temp Double/MAX_VALUE}]
+           [:rt-ref {:gas-const 0.25} {:ref-temp Double/MIN_VALUE}]
+           [:hydrogen-throughput {} {:ref-volumetric-flow Double/MAX_VALUE}]
+           [:hydrogen-throughput {} {:ref-pressure Double/MIN_VALUE}]
+           [:hydrogen-molar-flow {} {:ref-temp Double/MIN_VALUE}]
+           [:hydrogen-molar-flow {} {:ref-pressure 1.0 :ref-volumetric-flow Double/MIN_VALUE}]
+           [:n2 {} {:diameter 1e-160}]
+           [:n2 {} {:diameter 1e150 :ref-volumetric-flow 1e-100}]
+           [:rt {:gas-const Double/MAX_VALUE} {:ref-temp 0.5}]
+           [:mu1 {:sb4-collision-diameter 1e-200} {}]
+           [:mu1 {:sb4-collision-diameter 1e200} {}]
+           [:mu2 {:h2-reference-temp Double/MAX_VALUE} {}]
+           [:dk2 {:gas-const 1e303} {:ref-temp 1.0}]
+           [:k12 {:h2-collision-diameter Double/MAX_VALUE} {}]
+           [:k12 {:avogadro-const Double/MIN_VALUE :sb4-molar-mass 1e-20} {}]
+           [:phi12 {:h2-reference-viscosity Double/MIN_VALUE} {}]]]
+    (let [params (merge transport/default-parameters parameter-overrides)
+          values (merge conditions condition-overrides)]
+      (is (= quantity (:quantity (ex-data-from #(solver/prepare-problem params values))))
+          (pr-str [parameter-overrides condition-overrides])))))
 
 (defn- assert-profile-boundaries [problem {:keys [z state profile status]}]
   (is (= :success status))
@@ -166,7 +234,7 @@
         (when (zero? n1)
           (is (every? #(zero? (first (:state %))) (:profile trial))))))
     (is (not (contains? (solver/integrate-trial problem 0.0) :residual)))
-    (doseq [n1 [-1.0 ##NaN ##Inf ##-Inf "0" nil]]
+    (doseq [n1 [-1.0 ##NaN ##Inf ##-Inf "0" nil -1e-500M 1e-500M]]
       (is (= {:n1 n1} (ex-data-from #(solver/integrate-trial problem n1)))))))
 
 (deftest integration-failure-preserves-diagnostics-test

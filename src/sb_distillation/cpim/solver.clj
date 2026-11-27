@@ -12,20 +12,25 @@
   (and (number? x)
        (Double/isFinite (double x))))
 
+(defn- valid-si-value? [value allow-zero?]
+  (and (number? value)
+       (if (pos? value)
+         (let [x (double value)]
+           (and (> x 0.0) (Double/isFinite x)))
+         (and allow-zero? (zero? value)))))
+
 (defn valid-pressure-state?
   "Check physical admissibility of the pressure
   state [p_1 p_2], with pressures in Pa.
-  Both partial pressures and total pressure
-  must be finite.
+  The partial pressures must be finite and retain their signs in
+  double precision, and their sum must be finite.
   Requires p_1 >= 0 and p_2 > 0."
   [state]
   (and (sequential? state)
        (= 2 (count state))
        (let [[p1 p2] state]
-         (and (finite-number? p1)
-              (finite-number? p2)
-              (>= p1 0.0)
-              (> p2 0.0)
+         (and (valid-si-value? p1 true)
+              (valid-si-value? p2 false)
               (Double/isFinite
                (+ (double p1) (double p2)))))))
 
@@ -43,12 +48,18 @@
   [ref-pressure ref-volumetric-flow]
   (* ref-pressure ref-volumetric-flow))
 
+(defn- reference-rt
+  "R T_ref - Reference molar thermal energy in J/mol.
+  Reference temperature in K."
+  [{:keys [gas-const]} ref-temp]
+  (* gas-const ref-temp))
+
 (defn hydrogen-molar-flow
   "n_dot_2 - Hydrogen molar flow in mol/s.
   Throughput in Pa*m^3/s,
   reference temperature in K."
-  [{:keys [gas-const]} throughput ref-temp]
-  (/ throughput (* gas-const ref-temp)))
+  [params throughput ref-temp]
+  (/ throughput (reference-rt params ref-temp)))
 
 (defn hydrogen-molar-flux
   "N_2 - Hydrogen molar flux in mol/(m^2*s).
@@ -71,79 +82,64 @@
   [gauge-pressure pressure-drop]
   (+ gauge-pressure pressure-drop))
 
-(defn- validate-conditions!
-  "Validate operating conditions of the CPIM
-  boundary-value problem.
-  All quantities are in SI units."
-  [conditions]
-  (doseq [k [:temp
-             :diameter
-             :length
-             :ref-pressure
-             :ref-temp]]
-    (let [v (get conditions k)]
-      (when-not (and (finite-number? v)
-                     (pos? v))
-        (throw
-         (ex-info "Expected a finite positive parameter."
-                  {:parameter k :value v})))))
+(defn- normalize-inputs [inputs positive-keys nonnegative-keys]
+  (into {}
+        (for [[keys allow-zero?] [[positive-keys false] [nonnegative-keys true]]
+              parameter keys
+              :let [value (get inputs parameter)]]
+          (if (valid-si-value? value allow-zero?)
+            [parameter (double value)]
+            (throw (ex-info (str "Expected " (name parameter) " to be a "
+                                 (if allow-zero? "nonnegative" "positive")
+                                 " number that converts to a finite double without rounding a nonzero value to zero.")
+                            {:parameter parameter :value value}))))))
 
-  (doseq [k [:ref-volumetric-flow
-             :gauge-pressure
-             :trap-pressure-drop]]
-    (let [v (get conditions k)]
-      (when-not (and (finite-number? v)
-                     (not (neg? v)))
-        (throw
-         (ex-info "Expected a finite nonnegative parameter."
-                  {:parameter k :value v})))))
-
-  (when-not (> (:temp conditions) 152.352)
-    (throw
-     (ex-info "Temperature outside Antoine correlation domain."
-              {:temp (:temp conditions)})))
-
-  (let [p2-out (outlet-hydrogen-pressure
-                (:gauge-pressure conditions)
-                (:trap-pressure-drop conditions))]
-    (when-not (valid-pressure-state? [0.0 p2-out])
-      (throw
-       (ex-info "Invalid outlet pressure state."
-                {:outlet-state [0.0 p2-out]}))))
-
-  conditions)
+(defn- checked-quantity [quantity value allow-zero?]
+  (when-not (valid-si-value? value allow-zero?)
+    (throw (ex-info (str "Expected a finite "
+                         (if allow-zero? "nonnegative" "positive")
+                         " computed value for " (name quantity) ".")
+                    {:quantity quantity :value value})))
+  value)
 
 (defn prepare-problem
   "Prepare constant coefficients and boundary conditions
   for the CPIM boundary-value problem.
-  All input and output quantities are in SI units."
-  [params
-   {:keys [temp
-           diameter
-           length
-           ref-pressure
-           ref-temp
-           ref-volumetric-flow
-           gauge-pressure
-           trap-pressure-drop]
-    :as conditions}]
-  (validate-conditions! conditions)
-  (let [area (cross-sectional-area diameter)
-
-        throughput (hydrogen-throughput
-                    ref-pressure
-                    ref-volumetric-flow)
-
-        molar-flow (hydrogen-molar-flow
-                    params throughput ref-temp)
-
-        n2 (hydrogen-molar-flux molar-flow diameter)
-
-        p1-in (thermo/sb-liquid-vapor-pressure temp)
-
-        p2-out (outlet-hydrogen-pressure
-                gauge-pressure trap-pressure-drop)
-
+  All quantities are in SI units. Required inputs are numeric and
+  strictly positive, with zero also allowed for the Sutherland constant,
+  reference volumetric flow, gauge pressure, and trap pressure drop.
+  Signs are checked before conversion to double. Nonfinite conversions
+  and nonzero inputs rounded to zero are rejected. Derived quantities
+  must be positive and finite, with zero allowed for the hydrogen flow
+  quantities only when the supplied volumetric flow is zero.
+  ExceptionInfo identifies invalid inputs by :parameter and invalid
+  computed values by :quantity."
+  [params conditions]
+  (let [{:keys [temp diameter length ref-pressure ref-temp
+                ref-volumetric-flow gauge-pressure trap-pressure-drop]}
+        (normalize-inputs conditions
+                          [:temp :diameter :length :ref-pressure :ref-temp]
+                          [:ref-volumetric-flow :gauge-pressure :trap-pressure-drop])
+        params (normalize-inputs params
+                                 [:gas-const :boltzmann-const :avogadro-const
+                                  :sb4-molar-mass :h2-molar-mass
+                                  :sb4-collision-diameter :h2-collision-diameter
+                                  :h2-reference-viscosity :h2-reference-temp]
+                                 [:h2-sutherland-constant])
+        _ (when-not (> temp 152.352)
+            (throw (ex-info "Temperature outside Antoine correlation domain."
+                            {:parameter :temp :value (:temp conditions)})))
+        area (checked-quantity :area (cross-sectional-area diameter) false)
+        p1-in (checked-quantity :p1-in (thermo/sb-liquid-vapor-pressure temp) false)
+        p2-out (checked-quantity :p2-out (outlet-hydrogen-pressure
+                                         gauge-pressure trap-pressure-drop) false)
+        rt-ref (checked-quantity :rt-ref (reference-rt params ref-temp) false)
+        zero-feed? (zero? ref-volumetric-flow)
+        throughput (checked-quantity :hydrogen-throughput
+                                     (hydrogen-throughput ref-pressure ref-volumetric-flow)
+                                     zero-feed?)
+        molar-flow (checked-quantity :hydrogen-molar-flow (/ throughput rt-ref) zero-feed?)
+        n2 (checked-quantity :n2 (/ molar-flow area) zero-feed?)
         coefficients (model/prepare-coefficients
                       params temp diameter)]
 
@@ -173,13 +169,13 @@
             outlet-state]}
     n1 options]
 
-   (when-not (and (finite-number? n1)
-                  (>= n1 0.0))
+   (when-not (valid-si-value? n1 true)
      (throw
       (ex-info "Invalid trial Sb4 molar flux."
                {:n1 n1})))
 
-   (let [rhs (fn [_z [p1 p2]]
+   (let [n1 (double n1)
+         rhs (fn [_z [p1 p2]]
                (model/pressure-derivatives
                 coefficients p1 p2 n1 n2))]
 
@@ -411,10 +407,8 @@
   Antimony mass in kg, mass flow in kg/s.
   Positive mass at zero flow requires infinite time."
   [mass mass-flow]
-  (when-not (and (finite-number? mass)
-                 (>= mass 0.0)
-                 (finite-number? mass-flow)
-                 (>= mass-flow 0.0))
+  (when-not (and (valid-si-value? mass true)
+                 (valid-si-value? mass-flow true))
     (throw
      (ex-info "Invalid distillation parameters."
               {:mass mass
