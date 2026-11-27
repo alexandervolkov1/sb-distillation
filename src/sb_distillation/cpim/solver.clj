@@ -310,6 +310,13 @@
    :max-iterations    64
    :ode-options       {}})
 
+(defn sb-mass-flow
+  "m_dot_1 - Antimony mass flow in kg/s.
+  Molar flux in mol/(m^2*s), area in m^2,
+  Sb4 molar mass in kg/mol."
+  [molar-flux area molar-mass]
+  (* molar-mass molar-flux area))
+
 (defn solve
   "Solve the CPIM boundary-value problem by shooting.
   Returns the Sb4 molar flux N_1 in mol/(m^2*s),
@@ -377,6 +384,10 @@
            (if (= :success (:status root-result))
 
              (assoc trial
+                    :mass-flow (sb-mass-flow
+                                (:n1 trial)
+                                (:area problem)
+                                (:sb4-molar-mass problem))
                     :root-result root-result
                     :bracket-trials trials)
 
@@ -394,3 +405,22 @@
               :trial trial
               :root-result root-result
               :bracket-trials trials})))))))
+
+(defn distillation-time
+  "t - Distillation time in seconds.
+  Antimony mass in kg, mass flow in kg/s.
+  Positive mass at zero flow requires infinite time."
+  [mass mass-flow]
+  (when-not (and (finite-number? mass)
+                 (>= mass 0.0)
+                 (finite-number? mass-flow)
+                 (>= mass-flow 0.0))
+    (throw
+     (ex-info "Invalid distillation parameters."
+              {:mass mass
+               :mass-flow mass-flow})))
+
+  (cond
+    (zero? mass)      0.0
+    (zero? mass-flow) ##Inf
+    :else             (/ mass mass-flow)))
