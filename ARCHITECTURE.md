@@ -43,7 +43,7 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 
 ### Numerical core
 
-The numerical namespaces operate on caller-supplied functions. The planned physical CPIM solver will assemble the pressure and flux boundary conditions, adapt the CPIM right-hand side for backward integration, and construct and bracket the inlet saturation residual for shooting. It will apply physical admissibility checks and interpret numerical failures. [Development roadmap](ROADMAP.md)
+The numerical namespaces operate on caller-supplied functions. The physical solver uses them to integrate the CPIM boundary-value problem and find the inlet saturation residual's root. [Development roadmap](ROADMAP.md)
 
 **`sb-distillation.numerics.ode`** integrates vector initial-value problems in either direction using adaptive classical RK4. The caller supplies `f(z, state)` and can supply a `valid-state?` predicate. States are checked before each RHS evaluation and at the end of each RK4 step. Derivative vectors must match the state dimension. [ODE source][ode] · [ODE tests][ode-tests]
 
@@ -58,11 +58,18 @@ The numerical namespaces operate on caller-supplied functions. The planned physi
 
 Bisection coordinates use double precision and can exhaust the available midpoints. The residual and tolerance retain their Clojure numeric types. Comparison of two floating-point values uses the floating-point path. Mixed comparisons use exact cross products with binary floating-point operands converted to their exact values. This preserves the residual sign and tolerance comparison even outside the double range.
 
+### Physical solver
+
+- `sb-distillation.cpim.thermodynamics` provides the liquid and solid antimony vapor-pressure correlations in Pa with Kelvin inputs. The liquid correlation supplies the inlet boundary condition. The working temperatures use its extrapolation below the 1058–1373 K fit interval. [Thermodynamics source][thermodynamics]
+- `sb-distillation.cpim.solver` prepares the SI boundary-value problem from the regulator reference conditions, tube geometry, trap pressure drop, and transport parameters. It integrates trial profiles from the receiver to the source and enforces finite, physically admissible pressure states at RK4 stages. The bracket search doubles the molecular flux estimate and stops with diagnostics if a trial fails. [Solver source][solver]
+- `solve` uses an absolute inlet residual tolerance in Pa, with a default of `1e-3`. The report describes an absolute-plus-relative tolerance. Each solve reuses the bracket endpoint profiles and caches subsequent trials for that call. A successful solve returns the selected profile and Sb₄ mass flow in kg/s. Failure identifies the bracketing or shooting stage and retains the corresponding diagnostics.
+
 ### Reference calculations and verification
 
 - Legacy references preserve ampoule geometry, vapor pressures, conductance and Knudsen corrections, viscosity, diffusion, and pure and binary Dusty Gas Model (DGM) rates. Binary DGM uses RK4 and bisection. Some legacy APIs use °C, Torr, or g/h. The early empirical estimate sets receiver pressure by solid-Sb saturation. DGM and CPIM theory use zero outlet Sb₄ pressure. [Legacy code][legacy] · [Legacy units and assumptions][legacy-docs]
 - [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
 - Automated tests cover all seven basic transport functions using independent references, scaling laws, and viscosity limits and symmetries. The model tests cover all seven core functions, including coefficient maps, pure-component states, flux linearity, pressure-gradient consistency, and both ODE limits at finite positive pressures. [Transport tests][cpim-tests] · [Model tests][model-tests]
+- Solver and thermodynamics tests cover boundary preparation, both pressure correlations, trial and full profiles against an independent SciPy reference, and numerical failure propagation. The separate verification study compares all 189 operating points against DOP853 and Brent, studies convergence and both limiting regimes, and measures serial JVM performance. [Solver tests][solver-tests] · [Thermodynamics tests][thermodynamics-tests] · [Verification study][verification]
 - Legacy tests cover geometry, saturation pressures, and four historical transport outputs. The liquid-Sb test at 700 °C checks the correlation below its 1058–1373 K Antoine fit interval. [Legacy tests][tests] · [NIST fit data][nist]
 
 Run from the project root using the aliases in [deps.edn](deps.edn).
@@ -84,6 +91,8 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [young-todd]: https://www.sciencedirect.com/science/article/pii/S0017931005004904
 [transport]: src/sb_distillation/cpim/transport.clj
 [model]: src/sb_distillation/cpim/model.clj
+[solver]: src/sb_distillation/cpim/solver.clj
+[thermodynamics]: src/sb_distillation/cpim/thermodynamics.clj
 [ode]: src/sb_distillation/numerics/ode.clj
 [root]: src/sb_distillation/numerics/root.clj
 [legacy]: src/sb_distillation/reference/legacy.clj
@@ -92,6 +101,9 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [notebook]: notebooks/sb_distillation/analysis.clj
 [cpim-tests]: test/sb_distillation/cpim/transport_test.clj
 [model-tests]: test/sb_distillation/cpim/model_test.clj
+[solver-tests]: test/sb_distillation/cpim/solver_test.clj
+[thermodynamics-tests]: test/sb_distillation/cpim/thermodynamics_test.clj
+[verification]: scripts/cpim-verification/README.md
 [ode-tests]: test/sb_distillation/numerics/ode_test.clj
 [root-tests]: test/sb_distillation/numerics/root_test.clj
 [tests]: test/sb_distillation_test.clj
