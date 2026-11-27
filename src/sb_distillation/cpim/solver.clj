@@ -26,3 +26,18 @@
   Molar flow in mol/s, inner diameter in m."
   [molar-flow diameter]
   (/ molar-flow (cross-sectional-area diameter)))
+
+(defn trap-pressure-drop
+  "Delta p_trap - Hydrogen pressure drop
+  across the trap in Pa.
+  Throughput in Pa*m^3/s, conductance in m^3/s.
+  Both must use the same reference conditions."
+  [throughput trap-conductance]
+  (/ throughput trap-conductance))
+
+(defn outlet-hydrogen-pressure
+  "p_2(L) - Hydrogen partial pressure
+  at the tube outlet in Pa.
+  Gauge pressure and trap pressure drop in Pa."
+  [gauge-pressure pressure-drop]
+  (+ gauge-pressure pressure-drop))
