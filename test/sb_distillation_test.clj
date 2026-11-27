@@ -8,6 +8,7 @@
             [sb-distillation.dgm.model-test]
             [sb-distillation.numerics.ode-test]
             [sb-distillation.numerics.root-test]
+            [sb-distillation.physics.pure-vapor-test]
             [sb-distillation.reference.legacy :as model]
             [sb-distillation.solver-test]))
 
@@ -122,6 +123,7 @@
                                        'sb-distillation.cpim.thermodynamics-test
                                        'sb-distillation.dgm.model-test
                                        'sb-distillation.solver-test
+                                       'sb-distillation.physics.pure-vapor-test
                                        'sb-distillation.numerics.ode-test
                                        'sb-distillation.numerics.root-test)]
     (when (pos? (+ fail error))

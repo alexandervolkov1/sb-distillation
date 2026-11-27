@@ -1,6 +1,23 @@
 (ns sb-distillation.physics.common
   (:require [sb-distillation.physics.transport :as tr]))
 
+(defn viscous-permeability
+  "B_0 - Viscous permeability of a circular tube in m^2.
+  Inner diameter in m, finite and strictly positive in double precision."
+  [diameter]
+  (when-not (and (number? diameter)
+                 (pos? diameter)
+                 (let [d (double diameter)]
+                   (and (pos? d) (Double/isFinite d))))
+    (throw (ex-info "Expected a finite positive inner diameter in meters."
+                    {:parameter :diameter :value diameter})))
+  (let [d (double diameter)
+        b0 (* (/ d 32.0) d)]
+    (when-not (and (pos? b0) (Double/isFinite b0))
+      (throw (ex-info "Expected finite positive viscous permeability."
+                      {:quantity :b0 :value b0})))
+    b0))
+
 (defn molecular-resistance
   "A_K - Molecular pressure resistance coefficient
   in (kg/mol)^0.5/s.
