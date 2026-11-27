@@ -208,3 +208,97 @@
        (assoc trial
               :residual (- (first state) p1-in))
        trial))))
+
+(defn molecular-flux-estimate
+  "N_{1,mol} - Sb4 molar flux estimate
+  in the free-molecular limit, in mol/(m^2*s).
+  Used as the initial shooting bracket scale."
+  [{:keys [length p1-in coefficients]}]
+  (let [{:keys [rt dk1]} coefficients]
+    (/ (* dk1 p1-in)
+       (* rt length))))
+
+(defn find-shooting-bracket
+  "Find a bracket for the shooting residual F(N_1).
+  Start at zero flux and double the molecular estimate
+  until a nonnegative residual is found.
+  Failed integrations terminate the search.
+  Fluxes in mol/(m^2*s), residuals in Pa.
+  max-trials includes the initial zero-flux trial."
+  ([problem]
+   (find-shooting-bracket problem {} 32))
+
+  ([problem ode-options max-trials]
+   (when-not (and (integer? max-trials)
+                  (>= max-trials 2))
+     (throw
+      (ex-info "Invalid bracket trial limit."
+               {:max-trials max-trials})))
+
+   (loop [lower (evaluate-trial problem 0.0 ode-options)
+          upper-n1 (molecular-flux-estimate problem)
+          trials 1]
+
+     (cond
+       (not= :success (:status lower))
+       {:status :failed
+        :reason :integration-failed
+        :trial lower
+        :trials trials}
+
+       (not (finite-number? (:residual lower)))
+       {:status :failed
+        :reason :non-finite-residual
+        :trial lower
+        :trials trials}
+
+       (not (neg? (:residual lower)))
+       {:status :failed
+        :reason :invalid-lower-residual
+        :trial lower
+        :trials trials}
+
+       (>= trials max-trials)
+       {:status :failed
+        :reason :max-trials
+        :lower-trial lower
+        :trials trials}
+
+       (not (and (finite-number? upper-n1)
+                 (> upper-n1 (:n1 lower))))
+       {:status :failed
+        :reason :invalid-upper-flux
+        :upper-n1 upper-n1
+        :lower-trial lower
+        :trials trials}
+
+       :else
+       (let [upper (evaluate-trial
+                    problem upper-n1 ode-options)
+             trials (inc trials)]
+
+         (cond
+           (not= :success (:status upper))
+           {:status :failed
+            :reason :integration-failed
+            :lower-trial lower
+            :trial upper
+            :trials trials}
+
+           (not (finite-number? (:residual upper)))
+           {:status :failed
+            :reason :non-finite-residual
+            :trial upper
+            :trials trials}
+
+           (>= (:residual upper) 0.0)
+           {:status :success
+            :bracket [(:n1 lower) (:n1 upper)]
+            :lower-trial lower
+            :upper-trial upper
+            :trials trials}
+
+           :else
+           (recur upper
+                  (* 2.0 upper-n1)
+                  trials)))))))
