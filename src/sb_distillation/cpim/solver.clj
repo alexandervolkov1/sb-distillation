@@ -191,3 +191,20 @@
        (assoc options
               :valid-state? valid-pressure-state?))
       :n1 n1))))
+
+(defn evaluate-trial
+  "Evaluate a trial Sb4 molar flux N_1 in mol/(m^2*s).
+  F(N_1) = p_1(0; N_1) - p_{1,sat}, in Pa.
+  The residual is available only after successful
+  integration to z = 0."
+  ([problem n1]
+   (evaluate-trial problem n1 {}))
+
+  ([{:keys [p1-in] :as problem} n1 options]
+   (let [{:keys [status state] :as trial}
+         (integrate-trial problem n1 options)]
+
+     (if (= status :success)
+       (assoc trial
+              :residual (- (first state) p1-in))
+       trial))))
