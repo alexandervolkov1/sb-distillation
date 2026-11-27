@@ -37,7 +37,7 @@ The Knudsen diffusivities, hard-sphere Chapman–Enskog factor `K_12 = p D_12`, 
 | `wilke-interaction-factor` | Dimensionless `Φ_ij` from ordered viscosities and molar masses. |
 | `mixture-viscosity` | `μ` in Pa·s from mole fractions, pure viscosities, and cross interaction factors. |
 
-- `sb-distillation.physics.common` prepares `RT`, diameter, square roots of molar masses, `D_{K,i}`, `K_12`, pure viscosities, Wilke factors, and `A_K` once per tube setup. Its local calculation uses partial pressures to obtain `p`, mole fractions, mixture viscosity, `1/A_C`, and `A`. Both models obtain `G) from `total-pressure-gradient`. [Shared tube physics][physics]
+- `sb-distillation.physics.common` prepares `RT`, diameter, square roots of molar masses, `D_{K,i}`, `K_12`, pure viscosities, Wilke factors, and `A_K` once per tube setup. Its local calculation uses partial pressures to obtain `p`, mole fractions, mixture viscosity, `1/A_C`, and `A`. Both models obtain `G` from `total-pressure-gradient`. [Shared tube physics][physics]
 - `sb-distillation.cpim.model` computes Bosanquet effective diffusivities and uses them in the CPIM partial-pressure equations. [CPIM model][model]
 - `sb-distillation.dgm.model` adds `B_0` to the shared coefficient map once per DGM solve. Its right-hand side uses the shared local coefficients, binary diffusivity, and total-pressure gradient to compute the DGM partial-pressure derivatives. Both models return `[dp_1/dz dp_2/dz]` in the direction of increasing `z`. [DGM model][dgm-model]
 
@@ -73,7 +73,7 @@ Bisection coordinates use double precision and can exhaust the available midpoin
 - [Plot helpers][plot] prepare a Vega-Lite theme and grid layers and extract contour points by interpolating the first crossing in log time. [Clay analysis notebook][notebook] is currently a namespace and heading scaffold for future experiments.
 - Automated tests cover all seven basic transport functions using independent references, scaling laws, and viscosity limits and symmetries. The model tests cover all seven core functions, including coefficient maps, pure-component states, flux linearity, pressure-gradient consistency, and both ODE limits at finite positive pressures. [Transport tests][cpim-tests] · [Model tests][model-tests]
 - Solver and thermodynamics tests cover boundary preparation, both pressure correlations, trial and full profiles against an independent SciPy reference, and numerical failure propagation. The separate verification study compares all 189 operating points against DOP853 and Brent, studies convergence and both limiting regimes, and measures serial JVM performance. [Solver tests][solver-tests] · [Thermodynamics tests][thermodynamics-tests] · [Verification study][verification]
-- The model selection tests exercise the default and explicit CPIM calls, a DGM solve under baseline conditions, and model identifiers on successful and failed solves. Extended mathematical tests and independent numerical verification of DGM are pending. [Model selection tests][selection-tests]
+- DGM mathematical tests cover independent species and total gradients, the CPIM–DGM gradient difference, and both transport limits. Solver tests cover the baseline SciPy reference, model selection, failure diagnostics, and reuse of the same prepared problem. The independent numerical study compares each model against SciPy on 189 operating points and checks physical admissibility and boundary conditions on a 7503-point grid per model. [DGM model tests][dgm-tests] · [Solver tests][selection-tests] · [DGM verification study][dgm-verification]
 - Legacy tests cover geometry, saturation pressures, and four historical transport outputs. The liquid-Sb test at 700 °C checks the correlation below its 1058–1373 K Antoine fit interval. [Legacy tests][tests] · [NIST fit data][nist]
 
 Run from the project root using the aliases in [deps.edn](deps.edn).
@@ -110,10 +110,12 @@ Clay writes `target/clay/sb_distillation.analysis.html`. [Clay configuration](cl
 [notebook]: notebooks/sb_distillation/analysis.clj
 [cpim-tests]: test/sb_distillation/cpim/transport_test.clj
 [model-tests]: test/sb_distillation/cpim/model_test.clj
+[dgm-tests]: test/sb_distillation/dgm/model_test.clj
 [solver-tests]: test/sb_distillation/cpim/solver_test.clj
 [selection-tests]: test/sb_distillation/solver_test.clj
 [thermodynamics-tests]: test/sb_distillation/cpim/thermodynamics_test.clj
 [verification]: scripts/cpim-verification/README.md
+[dgm-verification]: scripts/cpim-verification/DGM.md
 [ode-tests]: test/sb_distillation/numerics/ode_test.clj
 [root-tests]: test/sb_distillation/numerics/root_test.clj
 [tests]: test/sb_distillation_test.clj

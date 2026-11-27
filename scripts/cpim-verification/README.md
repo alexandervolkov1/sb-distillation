@@ -1,5 +1,7 @@
 # CPIM solver verification
 
+The follow-up study verifies DGM and reruns the CPIM reference and dense grids. It includes a controlled serial benchmark of both models and the pre-refactor CPIM revision. [DGM verification](DGM.md)
+
 ## Reference and reproduction
 
 The reference integrates total pressure and Sb₄ mole fraction in distance from the outlet using SciPy DOP853. A trial that reaches equilibrium early supplies a positive objective from the remaining tube length. A trial that reaches the inlet below equilibrium supplies the negative pressure deficit. Brent's method finds the zero of this continuous objective. A hydrogen-depletion event or integrator failure raises an error. Each final flux is integrated across the full tube to produce the pressure and composition profiles. The transport and boundary equations come from the pinned theory report. The two vapor-pressure correlations use the legacy coefficients with Kelvin inputs and Pa outputs. [Theory revision](https://github.com/alexandervolkov1/sb-distillation-theory/blob/93c4a9e09dae96427635c2e8130a058c982b6931/main.typ) · [Legacy correlations](../../src/sb_distillation/reference/legacy.clj)
@@ -17,7 +19,7 @@ python scripts/cpim-verification/reference.py --pressures target/cpim-verificati
 clojure -M:test
 ```
 
-Omit `--full-grid` for the 189-point study and timing sample. The validation regressions now run with `clojure -M:test`. [Solver tests](../../test/sb_distillation/cpim/solver_test.clj)
+Omit `--full-grid` for the 189-point study. The current benchmark runs separately from the grid checks. The validation regressions run with `clojure -M:test`. [Solver tests](../../test/sb_distillation/cpim/solver_test.clj) · [Benchmark instructions](DGM.md#performance)
 
 ## Baseline at 700 °C, 10 mm, 200 ml/h
 

@@ -7,13 +7,12 @@
 - CPIM is numerically verified over the provisional 680–720 °C, 6–12 mm, 100–300 ml/h operating range. All 189 reference-grid cases passed the boundary and pressure checks. The full CPIM boundary-value solution approaches both transport limits in synthetic cases. [Verification study](scripts/cpim-verification/README.md)
 - The physical solver validates required inputs before calculation and checks derived values for positivity and finite double representation. Regressions cover conversion and calculation overflow and underflow, mixed numeric types, and zero flow. The 189-point reference comparison and 7503-point dense grid passed after the validation fixes. [Input contract](ARCHITECTURE.md#physical-solver) · [Solver tests](test/sb_distillation/cpim/solver_test.clj)
 - CPIM and DGM share transport, thermodynamics, the total-pressure gradient, boundary preparation, and the shooting solver. CPIM remains the default. The DGM implementation follows theory revision `e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6` and passes the baseline solve and model selection checks. The original independent CPIM verification used revision `93c4a9e09dae96427635c2e8130a058c982b6931`. [Accepted theory](https://github.com/alexandervolkov1/sb-distillation-theory/blob/e6a744f3a66f7a58dcb99a81f7a8655fa8bdacf6/main.typ#L1156-L1364) · [Model selection tests](test/sb_distillation/solver_test.clj) · [CPIM verification study](scripts/cpim-verification/README.md)
+- Independent mathematical tests verify the DGM partial-pressure equations and their relation to CPIM. Both models pass the 189-point SciPy comparison and the 7503-point dense-grid checks. DGM approaches the molecular and continuum approximations in the full boundary-value problem. The maximum relative DGM mass-flow error against SciPy is `2.509e-5` in the reference grid. [DGM model tests](test/sb_distillation/dgm/model_test.clj) · [Numerical verification and benchmarks](scripts/cpim-verification/DGM.md)
 - Preliminary level maps will use the current defaults of `1e-8 Pa` absolute and `1e-6` relative for RK4 and `1e-3 Pa` absolute for the shooting residual. [Convergence and tolerances](scripts/cpim-verification/README.md#convergence-and-tolerances)
 
 ## Next steps
 
-1. Test the DGM equations against independent mathematical references, including both transport limits and the relation between the CPIM and DGM pressure derivatives.
-2. Verify DGM with an independent numerical solver. Run both models over the common operating grids and compare convergence and performance.
-3. Quantify the model differences in mass flow and distillation time over the operating range.
+- Quantify the model differences in mass flow and distillation time over the operating range.
 
 ## Deferred
 

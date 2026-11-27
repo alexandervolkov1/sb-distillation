@@ -1,5 +1,7 @@
 (ns sb-distillation.solver-test
-  (:require [clojure.test :refer [deftest is]]
+  (:require [clojure.edn :as edn]
+            [clojure.java.io :as io]
+            [clojure.test :refer [deftest is]]
             [sb-distillation.cpim.solver :as cpim]
             [sb-distillation.cpim.solver-test :refer [conditions]]
             [sb-distillation.dgm.model :as dgm]
@@ -41,6 +43,16 @@
     (is (<= (abs residual) (:residual-tol solver/default-solver-options)))
     (is (and (Double/isFinite mass-flow) (pos? mass-flow)))
     (is (= trial (select-keys result (keys trial))))))
+
+(deftest dgm-baseline-agrees-with-independent-reference-test
+  (let [reference (edn/read-string (slurp (io/resource "fixtures/dgm-reference.edn")))
+        [_ p1 p2] (first (:profile reference))
+        {:keys [n1 state mass-flow]} (solver/solve (baseline) {:model :dgm})]
+    (is (< (abs (- (/ n1 (:n1 reference)) 1.0)) 3e-5))
+    (is (< (abs (- (/ mass-flow (:mass-flow reference)) 1.0)) 3e-5))
+    (is (< (abs (- (first state) p1)) 1.01e-3))
+    (is (< (abs (- (second state) p2)) 2e-4))
+    (is (< (abs (- (solver/distillation-time 0.5 mass-flow) (:time reference))) 7.0))))
 
 (deftest model-identifies-failed-solutions-test
   (let [problem (baseline)

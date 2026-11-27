@@ -2,9 +2,21 @@
          '[clojure.java.io :as io]
          '[clojure.string :as str]
          '[sb-distillation.cpim.model :as model]
-         '[sb-distillation.cpim.solver :as solver]
          '[sb-distillation.cpim.transport :as transport]
-         '[sb-distillation.solver :as shared-solver])
+         '[sb-distillation.dgm.model :as dgm]
+         '[sb-distillation.solver :as solver])
+
+(defn model-functions [model-id]
+  (let [[derivatives prepare-trial]
+        (case model-id
+          :cpim [model/pressure-derivatives identity]
+          :dgm [dgm/pressure-derivatives #(update % :coefficients dgm/prepare-coefficients)])]
+    {:model model-id
+     :derivatives derivatives
+     :solve (fn [problem options] (solver/solve problem (assoc options :model model-id)))
+     :trial (fn [problem flux options]
+              (solver/evaluate-trial derivatives (prepare-trial problem) flux options))
+     :prepare-trial prepare-trial}))
 
 (def gauge-torr {100 0.02010, 200 0.03680, 300 0.05110})
 (def stations (mapv #(/ % 20.0) (range 11)))
@@ -21,7 +33,7 @@
   (problem (+ temp 273.15) (* diameter 1.0e-3) feed
            (* (/ 101325.0 760.0) (gauge-torr feed))))
 
-(defn sampled-pressures [{:keys [coefficients n2]} {:keys [profile n1]} z]
+(defn sampled-pressures [derivatives {:keys [coefficients n2]} {:keys [profile n1]} z]
   (if-let [node (some #(when (== (:z %) z) %) profile)]
     (:state node)
     (let [[{za :z pa :state} {zb :z pb :state}]
@@ -32,8 +44,8 @@
           s (- 1.0 t)
           [p1a p2a] pa
           [p1b p2b] pb
-          da (model/pressure-derivatives coefficients p1a p2a n1 n2)
-          db (model/pressure-derivatives coefficients p1b p2b n1 n2)]
+          da (derivatives coefficients p1a p2a n1 n2)
+          db (derivatives coefficients p1b p2b n1 n2)]
       ;; Cubic Hermite interpolation at common stations, using signed dz.
       (mapv (fn [a b a-slope b-slope]
               (+ (* s s (+ 1.0 (* 2.0 t)) a)
@@ -41,33 +53,42 @@
                  (* h t s (- (* s a-slope) (* t b-slope)))))
             pa pb da db))))
 
-(defn profile-errors [problem solution expected]
+(defn profile-errors [sampled expected]
   (apply mapv max
-         (map (fn [z expected-state]
-                (mapv #(abs (- %1 %2)) (sampled-pressures problem solution z)
-                      expected-state))
-              stations expected)))
+         (map (fn [actual expected-state] (mapv #(abs (- %1 %2)) actual expected-state))
+              sampled expected)))
 
-(defn measure [problem]
-  (let [evaluate shared-solver/evaluate-trial
+(defn measure [solve problem]
+  (let [evaluate solver/evaluate-trial
         trials (volatile! [])
-        start (System/nanoTime)
-        result (with-redefs [shared-solver/evaluate-trial
-                            (fn [pressure-derivatives problem flux opts]
-                              (let [trial (evaluate pressure-derivatives problem flux opts)]
-                                (vswap! trials conj [(:attempts trial) (count (:profile trial))])
-                                trial))]
-                 (solver/solve problem))
-        ms (/ (- (System/nanoTime) start) 1.0e6)
+        result (with-redefs [solver/evaluate-trial
+                             (fn [pressure-derivatives problem flux opts]
+                               (let [trial (evaluate pressure-derivatives problem flux opts)]
+                                 (vswap! trials conj [(:attempts trial) (count (:profile trial)) flux])
+                                 trial))]
+                 (solve problem {}))
         ;; Previous lower endpoints are replaced during bracketing. The two
         ;; final endpoints and all subsequent midpoint profiles are cached.
         cached (when (= :success (:status result))
                  (drop (- (:bracket-trials result) 2) @trials))]
     {:result result
-     :ms ms
+     :trial-fluxes (mapv #(nth % 2) @trials)
      :evaluations (count @trials)
      :attempts (reduce + (map first @trials))
      :peak-cached-states (reduce + (map second cached))}))
+
+(defn verify-cache-isolation []
+  (let [point (operating-problem [700 10 200])
+        cpim (:solve (model-functions :cpim))
+        dgm (:solve (model-functions :dgm))]
+    (doseq [[model solve other] [[:cpim cpim dgm] [:dgm dgm cpim]]]
+      (let [{:keys [trial-fluxes evaluations result] :as before} (measure solve point)]
+        (assert (= :success (:status result)))
+        (assert (pos? evaluations))
+        (assert (= evaluations (count (distinct trial-fluxes))))
+        (dotimes [_ 5] (other point {}))
+        (assert (= before (measure solve point)))
+        (println "Cache isolation" model "distinct trial integrations:" evaluations)))))
 
 (defn verify-solution [problem result]
   (let [{:keys [profile mass-flow residual z state]} result]
@@ -85,13 +106,28 @@
                  (= residual (- (first state) (:p1-in problem)))))
     (assert (and (Double/isFinite mass-flow) (pos? mass-flow)))))
 
-(defn grid-case [[temp diameter feed ref-flux ref-p2 ref-mass ref-profile]]
+(defn mole-fractions [state]
+  (let [p (reduce + state)]
+    (mapv #(/ % p) state)))
+
+(defn grid-case [{:keys [solve trial derivatives prepare-trial model]}
+                 [temp diameter feed ref-flux ref-p2 ref-mass ref-profile]]
   (let [point [temp diameter feed]
         problem (operating-problem point)
-        {:keys [result] :as metrics} (measure problem)]
+        {:keys [result] :as metrics} (measure solve problem)]
     (if (= :success (:status result))
-      (do
+      (let [prepared (prepare-trial problem)
+            samples (mapv #(sampled-pressures derivatives prepared result %) stations)]
+        (assert (= model (:model result)))
         (verify-solution problem result)
+        (when (= point [700 10 200])
+          (prn {:baseline model :n1 (:n1 result) :reference-n1 ref-flux :n2 (:n2 problem)
+                :inlet (:state result) :reference-inlet (first ref-profile)
+                :mass-flow (:mass-flow result) :reference-mass-flow ref-mass
+                :residual (:residual result)
+                :stations (mapv (fn [z actual expected]
+                                  [z actual expected (mole-fractions actual) (mole-fractions expected)])
+                                stations samples ref-profile)}))
         (merge (dissoc metrics :result)
                {:point point :success true
                 :flow (:mass-flow result)
@@ -101,35 +137,54 @@
                 :mass-error (abs (- (/ (:mass-flow result) ref-mass) 1.0))
                 :p2-error (abs (- (second (:state result)) ref-p2))
                 :residual (abs (:residual result))
-                :profile-error (profile-errors problem result ref-profile)}))
-      (let [{:keys [trial lower-trial]} result
-            comparison (solver/evaluate-trial problem ref-flux)
-            above (solver/evaluate-trial problem (* 1.01 ref-flux))]
+                :profile-error (profile-errors samples ref-profile)
+                :fraction-error (profile-errors (mapv mole-fractions samples)
+                                                (mapv mole-fractions ref-profile))}))
+      (let [{failed-trial :trial :keys [lower-trial]} result
+            comparison (trial problem ref-flux {})
+            above (trial problem (* 1.01 ref-flux) {})]
         (assert (not (contains? result :mass-flow)))
         {:point point :success false :stage (:stage result) :reason (:reason result)
-         :trial (dissoc trial :profile) :lower (select-keys lower-trial [:n1 :residual])
+         :trial (dissoc failed-trial :profile) :lower (select-keys lower-trial [:n1 :residual])
          :reference (select-keys comparison [:n1 :status :residual])
          :above-reference (select-keys above [:n1 :status :residual])}))))
 
 (defn extrema [rows key]
   (mapv #(select-keys (apply % key rows) [:point key]) [min-key max-key]))
 
-(defn performance [points]
-  (let [rows (mapv (fn [point]
-                     (let [{:keys [result] :as metrics} (measure point)]
-                       (when (= :success (:status result))
-                         (verify-solution point result))
-                       (assoc (dissoc metrics :result)
-                              :status [(:status result) (:stage result) (:reason result)])))
+(defn dense-grid [{:keys [solve model]} path]
+  (let [points (for [temp (range 680 721), diameter (range 60 121), feed [100 200 300]]
+                 [temp (/ diameter 10.0) feed])
+        rows (mapv (fn [point]
+                     (let [problem (operating-problem point)
+                           {:keys [result] :as metrics} (measure solve problem)
+                           {:keys [status stage reason n1 mass-flow residual state]} result]
+                       (assert (= model (:model result)))
+                       (if (= :success status)
+                         (verify-solution problem result)
+                         (assert (not (contains? result :mass-flow))))
+                       (assoc (dissoc metrics :result :trial-fluxes)
+                              :point point
+                              :status [status stage reason]
+                              :values (when (= :success status)
+                                        (concat [n1 mass-flow (solver/distillation-time 0.5 mass-flow)
+                                                 residual] state)))))
                    points)
         column (fn [key] (mapv key rows))]
-    (println "Performance, measured serial solve calls:" (count rows))
+    (println "Dense grid solve calls:" (count rows))
     (println "Result frequencies:" (frequencies (column :status)))
-    (doseq [key [:ms :evaluations :attempts :peak-cached-states]
+    (doseq [row (take 3 (remove #(= :success (first (:status %))) rows))]
+      (prn (select-keys row [:point :status :evaluations :attempts])))
+    (doseq [key [:evaluations :attempts :peak-cached-states]
             :let [values (column key)]]
       (println key {:min (apply min values) :max (apply max values)
                     :mean (/ (reduce + values) (double (count rows)))}))
-    (println "Serial sum (s):" (/ (reduce + (column :ms)) 1000.0))))
+    (when path
+      (with-open [writer (io/writer path)]
+        (binding [*out* writer]
+          (println "temp_c,diameter_mm,feed_ml_h,status,n1_mol_m2_s,mass_flow_kg_s,time_s,residual_pa,p1_in_pa,p2_in_pa")
+          (doseq [{:keys [point status values]} rows]
+            (println (str/join "," (concat point [(name (first status))] (or values (repeat 6 "")))))))))))
 
 (def variants
   [["default"     1e-8  1e-6  1e-3]
@@ -146,33 +201,38 @@
    ["comparison"  1e-12 1e-10 1e-9]
    ["map-proposal" 1e-9 1e-7  1e-4]])
 
-(defn convergence [grid path]
+(defn convergence [{:keys [solve trial prepare-trial derivatives]} grid path]
   (with-open [writer (io/writer path)]
     (binding [*out* writer]
       (println "temp,diameter,feed,variant,mode,kind,n1,z,p1,p2,residual")
       (doseq [[temp diameter feed ref-flux] grid
               :let [point [temp diameter feed]]
               :when (#{[680 6 300] [700 10 200] [720 12 100]} point)
-              :let [problem (operating-problem point)]
+              :let [problem (operating-problem point)
+                    prepared (prepare-trial problem)]
               [variant abs-tol rel-tol residual-tol] variants
               :let [ode-options {:abs-tol abs-tol :rel-tol rel-tol}]
-              [mode result] [["fixed" (solver/evaluate-trial problem ref-flux ode-options)]
-                             ["shot" (solver/solve problem {:ode-options ode-options
-                                                           :residual-tol residual-tol})]]]
-        (when (= :success (:status result))
+              [mode result] [["fixed" (trial problem ref-flux ode-options)]
+                             ["shot" (solve problem {:ode-options ode-options
+                                                     :residual-tol residual-tol})]]]
+        (if (= :success (:status result))
           (doseq [[kind samples] [["node" (:profile result)]
                                   ["station" (for [z stations]
-                                               {:z z :state (sampled-pressures problem result z)})]]
+                                               {:z z :state (sampled-pressures derivatives prepared result z)})]]
                   {:keys [z state]} samples]
             (println (str/join "," (concat point [variant mode kind (:n1 result) z]
-                                            state [(:residual result)])))))))))
+                                            state [(:residual result)]))))
+          (throw (ex-info "Convergence trial failed."
+                          {:point point :variant variant :mode mode :result result})))))))
 
-(let [[ref-path pressure-path full-grid?] *command-line-args*
+(defn option-value [options key]
+  (second (drop-while #(not= key %) options)))
+
+(let [[ref-path pressure-path & options] *command-line-args*
       {:keys [grid limits]} (edn/read-string (slurp ref-path))
-      points (mapv #(operating-problem (take 3 %)) grid)]
-  (dotimes [_ 5]
-    (doseq [point points] (solver/solve point)))
-  (let [rows (mapv grid-case grid)
+      model (keyword (or (option-value options "--model") "cpim"))
+      {:keys [solve derivatives prepare-trial] :as functions} (model-functions model)]
+  (let [rows (mapv #(grid-case functions %) grid)
         good (filter :success rows)
         bad (remove :success rows)]
     (println "Grid successes / failures:" (count good) (count bad))
@@ -182,18 +242,20 @@
                  :flux-error :mass-error :p2-error :residual]]
       (println key (extrema good key)))
     (println "Max profile station errors (Pa):" (apply mapv max (map :profile-error good)))
+    (println "Max mole fraction station errors:" (apply mapv max (map :fraction-error good)))
     (doseq [[diameter feed outlet flux limit-flux pressures limit-pressures] limits
             :let [problem (problem 973.15 diameter feed outlet)
-                  result (solver/solve problem {:residual-tol 1.0e-8
-                                               :ode-options {:abs-tol 1e-11 :rel-tol 1e-9}})]]
+                  result (solve problem {:residual-tol 1.0e-8
+                                         :ode-options {:abs-tol 1e-11 :rel-tol 1e-9}})]]
       (assert (= :success (:status result)) (pr-str [diameter outlet result]))
-      (println "Limit" [diameter outlet] "relative flux errors [CPIM ref, limit]"
-               [(abs (- (/ (:n1 result) flux) 1.0)) (abs (- (/ (:n1 result) limit-flux) 1.0))]
-               "pressure errors [CPIM ref, limit]"
-               [(profile-errors problem result pressures) (profile-errors problem result limit-pressures)]))
-    (convergence grid pressure-path)
-    (performance points)
-    (when (= "--full-grid" full-grid?)
-      (performance
-       (for [temp (range 680 721), diameter (range 60 121), feed [100 200 300]]
-         (operating-problem [temp (/ diameter 10.0) feed]))))))
+      (verify-solution problem result)
+      (let [prepared (prepare-trial problem)
+            samples (mapv #(sampled-pressures derivatives prepared result %) stations)]
+        (println "Limit" [diameter outlet] "relative flux errors [full ref, limit]"
+                 [(abs (- (/ (:n1 result) flux) 1.0)) (abs (- (/ (:n1 result) limit-flux) 1.0))]
+                 "pressure errors [full ref, limit]"
+                 [(profile-errors samples pressures) (profile-errors samples limit-pressures)])))
+    (convergence functions grid pressure-path)
+    (verify-cache-isolation)
+    (when (some #{"--full-grid"} options)
+      (dense-grid functions (option-value options "--dense-csv")))))
