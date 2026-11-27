@@ -3,7 +3,8 @@
          '[clojure.string :as str]
          '[sb-distillation.cpim.model :as model]
          '[sb-distillation.cpim.solver :as solver]
-         '[sb-distillation.cpim.transport :as transport])
+         '[sb-distillation.cpim.transport :as transport]
+         '[sb-distillation.solver :as shared-solver])
 
 (def gauge-torr {100 0.02010, 200 0.03680, 300 0.05110})
 (def stations (mapv #(/ % 20.0) (range 11)))
@@ -48,12 +49,12 @@
               stations expected)))
 
 (defn measure [problem]
-  (let [evaluate solver/evaluate-trial
+  (let [evaluate shared-solver/evaluate-trial
         trials (volatile! [])
         start (System/nanoTime)
-        result (with-redefs [solver/evaluate-trial
-                            (fn [problem flux opts]
-                              (let [trial (evaluate problem flux opts)]
+        result (with-redefs [shared-solver/evaluate-trial
+                            (fn [pressure-derivatives problem flux opts]
+                              (let [trial (evaluate pressure-derivatives problem flux opts)]
                                 (vswap! trials conj [(:attempts trial) (count (:profile trial))])
                                 trial))]
                  (solver/solve problem))

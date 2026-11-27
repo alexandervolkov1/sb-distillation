@@ -4,7 +4,8 @@
             [clojure.test :refer [deftest is testing]]
             [sb-distillation.cpim.model :as model]
             [sb-distillation.cpim.solver :as solver]
-            [sb-distillation.cpim.transport :as transport]))
+            [sb-distillation.cpim.transport :as transport]
+            [sb-distillation.solver :as shared-solver]))
 
 (def conditions
   {:temp 973.15 :diameter 0.010 :length 0.500
@@ -260,7 +261,7 @@
           (is (not (contains? result :mass-flow))))))))
 
 (defn- trial-evaluator [evaluations residual]
-  (fn [_problem n1 options]
+  (fn [_pressure-derivatives _problem n1 options]
     (swap! evaluations conj [n1 options])
     (let [value (residual n1)]
       (merge {:n1 n1 :profile [{:z 0.0 :state [n1 1.0]}]}
@@ -275,8 +276,8 @@
     (is (apply < (first (:bracket result)) [(:n1 reference) (second (:bracket result))])))
   (let [calls (atom [])
         opts {:max-attempts 20}]
-    (with-redefs [solver/molecular-flux-estimate (constantly 1.0)
-                  solver/evaluate-trial (trial-evaluator calls #(- % 4.0))]
+    (with-redefs [shared-solver/molecular-flux-estimate (constantly 1.0)
+                  shared-solver/evaluate-trial (trial-evaluator calls #(- % 4.0))]
       (let [result (solver/find-shooting-bracket {} opts 4)]
         (is (= (mapv #(vector % opts) [0.0 1.0 2.0 4.0]) @calls))
         (is (= [:success [2.0 4.0] 4] ((juxt :status :bracket :trials) result)))
@@ -295,8 +296,8 @@
   (let [calls (atom [])
         failed {:status :failed :reason :step-too-small :attempts 7 :z 0.2
                 :state [2.0 0.01] :last-rejection {:reason :invalid-state}}]
-    (with-redefs [solver/molecular-flux-estimate (constantly 1.0)
-                  solver/evaluate-trial (trial-evaluator calls #(if (= 2.0 %) failed -1.0))]
+    (with-redefs [shared-solver/molecular-flux-estimate (constantly 1.0)
+                  shared-solver/evaluate-trial (trial-evaluator calls #(if (= 2.0 %) failed -1.0))]
       (let [result (solver/find-shooting-bracket {} {} 10)]
         (is (= [0.0 1.0 2.0] (mapv first @calls)))
         (is (= [:failed :integration-failed 3] ((juxt :status :reason :trials) result)))
@@ -304,8 +305,8 @@
         (is (not (contains? (:trial result) :residual)))
         (is (= 1.0 (get-in result [:lower-trial :n1])))))
     (reset! calls [])
-    (with-redefs [solver/molecular-flux-estimate (constantly Double/MAX_VALUE)
-                  solver/evaluate-trial (trial-evaluator calls (constantly -1.0))]
+    (with-redefs [shared-solver/molecular-flux-estimate (constantly Double/MAX_VALUE)
+                  shared-solver/evaluate-trial (trial-evaluator calls (constantly -1.0))]
       (let [result (solver/find-shooting-bracket {} {} 10)]
         (is (= [0.0 Double/MAX_VALUE] (mapv first @calls)))
         (is (= [:failed :invalid-upper-flux ##Inf 2]
@@ -332,13 +333,31 @@
     (is (= [(:n1 result) (:residual result)] ((juxt :x :fx) (:root-result result))))
     (assert-reference-profile (:profile reference) (:profile result))))
 
+(deftest shared-solver-uses-the-supplied-derivatives-test
+  (let [problem {:length 0.5 :outlet-state [0.0 4.0] :p1-in 3.0 :n2 0.25
+                 :coefficients {:rt 1.0 :dk1 1.0}
+                 :area 0.25 :sb4-molar-mass 0.5}
+        fluxes (atom [])
+        derivatives (fn [{:keys [rt]} _p1 _p2 n1 n2]
+                      (swap! fluxes conj n1)
+                      [(- (* 2.0 rt n1)) (- (* 2.0 n2))])
+        result (shared-solver/solve-with derivatives problem)]
+    (assert-profile-boundaries problem result)
+    (is (= [0.0 6.0 3.0] (vec (distinct @fluxes))))
+    (is (near? 3.0 (:n1 result) 1e-12))
+    (is (near? 0.375 (:mass-flow result) 1e-12))
+    (doseq [{:keys [z state]} (:profile result)
+            :let [distance (- 0.5 z)]]
+      (is (near? (* 6.0 distance) (first state) 1e-12))
+      (is (near? (+ 4.0 (* 0.5 distance)) (second state) 1e-12)))))
+
 (deftest full-solver-cache-and-endpoint-test
   (let [calls (atom [])
         problem {:area 0.25 :sb4-molar-mass 0.5}]
     (doseq [[root expected] [[4.0 [0.0 4.0]] [1.5 [0.0 4.0 2.0 1.0 1.5]]]]
       (reset! calls [])
-      (with-redefs [solver/molecular-flux-estimate (constantly 4.0)
-                    solver/evaluate-trial (trial-evaluator calls #(- % root))]
+      (with-redefs [shared-solver/molecular-flux-estimate (constantly 4.0)
+                    shared-solver/evaluate-trial (trial-evaluator calls #(- % root))]
         (let [result (solver/solve problem)]
           (is (= expected (mapv first @calls)))
           (is (= [:success root 0.0 (* root 0.125) 2]
@@ -358,8 +377,8 @@
              ["Infinity" ##Inf :non-finite-residual]]]
       (testing label
         (reset! calls [])
-        (with-redefs [solver/molecular-flux-estimate (constantly 4.0)
-                      solver/evaluate-trial (trial-evaluator calls {0.0 -1.0 4.0 1.0 2.0 mid-value})]
+        (with-redefs [shared-solver/molecular-flux-estimate (constantly 4.0)
+                      shared-solver/evaluate-trial (trial-evaluator calls {0.0 -1.0 4.0 1.0 2.0 mid-value})]
           (let [result (solver/solve {} {:max-iterations 1})]
             (is (= [0.0 4.0 2.0] (mapv first @calls)))
             (is (= [:failed :shooting expected-reason] ((juxt :status :stage :reason) result)))
@@ -368,8 +387,8 @@
             (is (not (contains? result :mass-flow)))
             (when (map? mid-value)
               (is (= failed (select-keys (:trial result) (keys failed)))))))))
-    (with-redefs [solver/molecular-flux-estimate (constantly 4.0)
-                  solver/evaluate-trial (trial-evaluator calls {0.0 -1.0 4.0 ##NaN})]
+    (with-redefs [shared-solver/molecular-flux-estimate (constantly 4.0)
+                  shared-solver/evaluate-trial (trial-evaluator calls {0.0 -1.0 4.0 ##NaN})]
       (let [result (solver/solve {})]
         (is (= [:failed :bracketing :non-finite-residual] ((juxt :status :stage :reason) result)))
         (is (not (contains? result :mass-flow)))))))
